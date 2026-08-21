@@ -1,3 +1,39 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+.leaflet-map-element {
+  min-height: 360px;
+  width: 100%;
+  border-radius: 0.5rem;
+}
+
+/* Cursore a mirino visibile quando si sceglie "Seleziona punto da mappa" */
+.leaflet-crosshair-mode,
+.leaflet-crosshair-mode .leaflet-container,
+.leaflet-crosshair-mode .leaflet-interactive,
+.leaflet-crosshair-mode .leaflet-tile-container {
+  cursor: crosshair !important;
+}
+
+.custom-wp-marker {
+  background: transparent;
+  border: none;
+}
+
+.ProseMirror {
+  outline: none;
+  min-height: 250px;
+  color: #f1f5f9;
+}
+
+.ProseMirror p {
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  color: #f8fafc;
+}

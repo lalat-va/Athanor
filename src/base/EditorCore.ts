@@ -8,10 +8,8 @@ import { I18nManager } from './I18nManager.js';
 
 /**
  * VINCOLO 1: TipTap come editor strutturato, non come rich-text editor.
- * Le estensioni di formattazione libera fornite di default da StarterKit (bold, italic, testo libero,
- * scorciatoie da editor tradizionale) sono ESPLICITAMENTE DISABILITATE o NON INCLUSE.
- * L'unico modo per l'utente di inserire contenuto è tramite comandi/slash-menu che generano istanze del nodo PluginBlock.
- * Questo trasforma l'interfaccia in un canvas reattivo dove i plugin iniettano nodi custom con i propri schemi e widget.
+ * Le estensioni di formattazione libera da StarterKit sono ESPLICITAMENTE DISABILITATE.
+ * L'unico modo per l'utente di inserire contenuto è tramite comandi che generano nodi PluginBlock.
  */
 export const PluginBlockNode = Node.create({
   name: 'pluginBlock',
@@ -71,14 +69,21 @@ export const PluginBlockNode = Node.create({
   },
 
   /**
-   * NodeView per PluginBlock che, al montaggio, invoca plugin.render(container, dataState, currentLocale)
-   * del plugin corrispondente, delegando il rendering effettivo al PluginManager.
+   * NodeView per PluginBlock con isolamento completo degli eventi ProseMirror (stopEvent & ignoreMutation).
+   * Questo impedisce che l'immissione di testo negli input HTML interni faccia collassare o ri-renderizzare la NodeView.
    */
   addNodeView() {
     return ({ node }) => {
       const container = document.createElement('div');
-      container.className = 'plugin-block-container my-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm';
+      container.className = 'plugin-block-container my-3 rounded-md border border-slate-700 bg-slate-900 p-3 shadow-sm';
       container.setAttribute('data-plugin-id', node.attrs.pluginId);
+
+      // Blocco della propagazione degli eventi da tastiera ed input verso ProseMirror
+      ['keydown', 'keyup', 'keypress', 'input', 'change'].forEach((eventType) => {
+        container.addEventListener(eventType, (e) => {
+          e.stopPropagation();
+        });
+      });
 
       const pluginManager = PluginManager.getInstance();
       const i18n = I18nManager.getInstance();
@@ -92,13 +97,26 @@ export const PluginBlockNode = Node.create({
 
       return {
         dom: container,
+
+        /**
+         * Impedisce a ProseMirror di intercettare gli eventi (keydown, click, input)
+         * che avvengono all'interno del widget del plugin.
+         */
+        stopEvent() {
+          return true;
+        },
+
+        /**
+         * Comunica a ProseMirror di ignorare le mutazioni DOM interne al plugin,
+         * evitando che l'editor distrugga ed il re-renderizzi il DOM ad ogni digitazione.
+         */
+        ignoreMutation() {
+          return true;
+        },
+
         update: (updatedNode) => {
           if (updatedNode.type.name !== this.name) return false;
           if (updatedNode.attrs.pluginId !== node.attrs.pluginId) return false;
-          if (plugin) {
-            container.innerHTML = '';
-            plugin.render(container, updatedNode.attrs.dataState, i18n.getLocale());
-          }
           return true;
         }
       };
@@ -110,10 +128,6 @@ export class EditorCore {
   private editor: Editor;
 
   constructor(element: HTMLElement, initialContent?: any) {
-    /**
-     * VINCOLO 1: StarterKit è disabilitato. Si includono soltanto nodi strutturali
-     * minimali (Document, Paragraph, Text, Heading) ed il nodo custom PluginBlock.
-     */
     this.editor = new Editor({
       element,
       extensions: [
@@ -143,6 +157,17 @@ export class EditorCore {
 
   public getJsonAst(): any {
     return this.editor.getJSON();
+  }
+
+  public insertPluginBlock(pluginId: string, dataState: any = {}, isOrganizational: boolean = false): void {
+    this.editor.chain().focus().insertContent({
+      type: 'pluginBlock',
+      attrs: {
+        pluginId,
+        dataState,
+        isOrganizational
+      }
+    }).run();
   }
 
   public destroy(): void {
