@@ -11,9 +11,10 @@
   "dependencies": {
     "@tiptap/core": "^3.30.2",
     "@tiptap/pm": "^3.30.2",
+    "@tiptap/starter-kit": "^3.30.2",
     "autoprefixer": "^10.5.4",
     "dexie": "^4.4.5",
-    "exceljs": "^4.4.0",
+    "exceljs": "^3.4.0",
     "markdown-it": "^15.0.0",
     "postcss": "^8.5.26",
     "tailwindcss": "^4.3.3",
@@ -22,6 +23,7 @@
     "yjs": "^13.6.32"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/markdown-it": "^14.2.0",
     "@types/node": "^26.2.0",
     "sass": "^1.103.1",
