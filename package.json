@@ -1,0 +1,33 @@
+{
+  "name": "local-first-app-core",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tiptap/core": "^3.30.2",
+    "@tiptap/pm": "^3.30.2",
+    "autoprefixer": "^10.5.4",
+    "dexie": "^4.4.5",
+    "exceljs": "^4.4.0",
+    "markdown-it": "^15.0.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.2.2",
+    "y-indexeddb": "^9.0.12",
+    "yjs": "^13.6.32"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.2.0",
+    "@types/node": "^26.2.0",
+    "sass": "^1.103.1",
+    "typescript": "^7.0.2"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true
+  }
+}
