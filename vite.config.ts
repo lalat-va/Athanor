@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
     plugins: [tailwindcss()],
                             root: './',
+                            base: '/Athanor/',
                             server: {
                                 port: 3000,
                                 host: true
