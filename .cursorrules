@@ -1,0 +1,20 @@
+# REGOLAMENTO ARCHITETTURALE DI PROGETTO (Local-First Core)
+
+## ⚠️ DISCLAIMER OBBLIGATORIO DI TESTING
+Ogni file generato o modificato deve contenere in testa o nella documentazione di riferimento l'avviso che il software è in versione DEMO PRE-ALPHA, rilasciato sotto licenza GPL v.3, ed esclude qualsiasi responsabilità dell'autore per perdita di dati.
+
+## 1. VINCOLI DI SICUREZZA E SANDBOX (CRITICO)
+*   **Isolamento Iframe**: Nella classe `SandboxContainer.ts`, è severamente vietato associare l'attributo `allow-same-origin` insieme all'attributo `allow-scripts` nell'iframe di esecuzione dei plugin. L'iframe deve essere rigorosamente configurato solo con `sandbox="allow-scripts"` per impedire accessi diretti a IndexedDB del parent o furto di token.
+*   **Bypass Amministrativo**: L'utente con ruolo `Administrator` non deve disporre di permessi di accesso in lettura sul contenuto (body) dei documenti o verbali sensibili nel database locale o cloud.
+
+## 2. FONTE DI VERITÀ RECONCILIATA (YJS & DEXIE)
+*   **Verità Unica**: La sola ed unica sorgente di verità del contenuto vivo dei documenti è il `Y.Doc` di Yjs, persistito via `y-indexeddb`.
+*   **Vista Materializzata**: La tabella `documents.body` in Dexie.js (IndexedDB) è una vista materializzata read-only ad esclusivo uso di query locali, ricerche testuali e listati. Non scrivere mai direttamente in Dexie per modificare il testo attivo.
+*   **Write Amplification Guard**: Qualsiasi write-back dal `Y.Doc` a Dexie deve essere protetto da un meccanismo di debounce di almeno 500ms in `CollabService.ts` per evitare saturazioni di IndexedDB ad ogni singola digitazione dell'utente.
+
+## 3. MECCANICA DI HASHING & COERENZA
+*   **Hash-Locking**: La firma crittografica con hash SHA-256 e il blocco dell'applicazione in sola lettura (Anti-Tampering at-rest) devono attivarsi esclusivamente quando un documento transiziona formalmente nello stato `PUBLISHED` (congelato). Non applicare controlli di inalterabilità bloccanti sui documenti in fase di `DRAFT` collaborativo per non interrompere la convergenza di Yjs.
+*   **Storage Quota Warning**: Il modulo `DataOrchestrator` deve interrogare periodicamente `navigator.storage.estimate()` ed emettere un warning `storage:quota_warning` sul bus di sistema se lo spazio occupato supera l'80% per prevenire arresti anomali offline.
+
+## 4. ASSENZA DI DATI DI ESEMPIO (CLEAN STATE)
+*   L'editor e tutti i database locali non devono contenere alcun dato fittizio, tracciato di test o waypoint di esempio all'inizializzazione. All'avvio, l'applicazione deve presentarsi in uno stato completamente pulito, centrando la mappa o i database in modalità neutra di attesa.

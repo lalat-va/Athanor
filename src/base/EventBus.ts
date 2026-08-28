@@ -1,54 +1,70 @@
-export type EventCallback = (...args: any[]) => void;
-
 /**
- * EventBus fortemente tipizzato basato su pattern Publisher-Subscriber.
- * Consente la comunicazione sicura e disaccoppiata tra il Core dell'applicazione,
- * i Moduli di connessione ed i singoli Plugin.
+ * Ecosistema Digitale per il Terzo Settore
+ * Licenza: GNU GPL v.3
+ *
+ * ⚠️ ATTENZIONE: VERSIONE DEMO / TESTING PRE-ALPHA ⚠️
+ * Questo software viene rilasciato esclusivamente a scopo dimostrativo e di test (Stato: Pre-Alpha).
+ * L'autore e i collaboratori non si assumono alcuna responsabilità per perdita di dati,
+ * malfunzionamenti o danni di qualsiasi genere derivanti dall'uso di questa applicazione.
  */
+
+export type SyncStatusType = 'offline' | 'connecting' | 'synced' | 'error';
+
+export interface EventMap {
+  'i18n:locale_changed': string;
+  'todo:created': any;
+  'todo:completed': any;
+  'sync:status': SyncStatusType;
+  [key: string]: any;
+}
+
+export type EventCallback<T = any> = (data: T) => void;
+
 export class EventBus {
+  private static instance: EventBus;
   private listeners: Map<string, Set<EventCallback>> = new Map();
 
-  /**
-   * Registra un listener per un determinato evento.
-   * Restituisce una funzione di unsubscribe per rimuovere facilmente il listener.
-   */
-  public on(event: string, callback: EventCallback): () => void {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set());
-    }
-    this.listeners.get(event)!.add(callback);
+  public constructor() {}
 
-    return () => {
-      this.off(event, callback);
-    };
+  public static getInstance(): EventBus {
+    if (!EventBus.instance) {
+      EventBus.instance = new EventBus();
+    }
+    return EventBus.instance;
   }
 
-  /**
-   * Rimuove un listener registrato per un determinato evento.
-   */
-  public off(event: string, callback: EventCallback): void {
-    const callbacks = this.listeners.get(event);
-    if (callbacks) {
-      callbacks.delete(callback);
-      if (callbacks.size === 0) {
-        this.listeners.delete(event);
+  public on<K extends keyof EventMap>(event: K | string, callback: EventCallback<EventMap[K]>): void {
+    const eventName = String(event);
+    if (!this.listeners.has(eventName)) {
+      this.listeners.set(eventName, new Set());
+    }
+    this.listeners.get(eventName)!.add(callback as EventCallback);
+  }
+
+  public off<K extends keyof EventMap>(event: K | string, callback: EventCallback<EventMap[K]>): void {
+    const eventName = String(event);
+    const handlers = this.listeners.get(eventName);
+    if (handlers) {
+      handlers.delete(callback as EventCallback);
+      if (handlers.size === 0) {
+        this.listeners.delete(eventName);
       }
     }
   }
 
-  /**
-   * Notifica tutti i sottoscrittori registrati inviando i dati forniti.
-   */
-  public emit(event: string, ...args: any[]): void {
-    const callbacks = this.listeners.get(event);
-    if (callbacks) {
-      callbacks.forEach((cb) => {
+  public emit<K extends keyof EventMap>(event: K | string, data: EventMap[K]): void {
+    const eventName = String(event);
+    const handlers = this.listeners.get(eventName);
+    if (handlers) {
+      handlers.forEach((callback) => {
         try {
-          cb(...args);
+          callback(data);
         } catch (error) {
-          console.error(`[EventBus] Error executing callback for event "${event}":`, error);
+          console.error(`[EventBus] Errore durante l'esecuzione del listener per l'evento "${eventName}":`, error);
         }
       });
     }
   }
 }
+
+export const eventBus = EventBus.getInstance();

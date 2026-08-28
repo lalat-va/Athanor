@@ -1,142 +1,132 @@
+/**
+ * Ecosistema Digitale per il Terzo Settore
+ * Licenza: GNU GPL v.3
+ *
+ * ⚠️ ATTENZIONE: VERSIONE DEMO / TESTING PRE-ALPHA ⚠️
+ * Questo software viene rilasciato esclusivamente a scopo dimostrativo e di test (Stato: Pre-Alpha).
+ * L'autore e i collaboratori non si assumono alcuna responsabilità per perdita di dati,
+ * malfunzionamenti o danni di qualsiasi genere derivanti dall'uso di questa applicazione.
+ */
+
 import { JsonAstNode } from './Database.js';
-import { PluginManager } from './PluginManager.js';
+import { PluginManager } from '../plugins/PluginManager.js';
 
 export class MarkdownSerializer {
   /**
-   * VINCOLO 5: Serializza l'albero JSON-AST in una stringa Markdown.
-   * Percorre l'albero JSON-AST, serializza i nodi strutturali core (Paragraph, Heading, ecc.)
-   * in Markdown standard e delega ai plugin la serializzazione dei nodi PluginBlock
-   * tramite plugin.serializeToMarkdown(dataState).
+   * Converte l'albero JSON-AST in testo formattato Markdown.
+   * Quando incontra un nodo 'pluginBlock', delega la compilazione al plugin relativo.
    */
   public static serialize(doc: JsonAstNode): string {
     if (!doc || !doc.content || !Array.isArray(doc.content)) {
       return '';
     }
 
-    const outputLines: string[] = [];
+    const lines: string[] = [];
     const pluginManager = PluginManager.getInstance();
 
-    for (const node of doc.content) {
+    doc.content.forEach((node) => {
       switch (node.type) {
         case 'heading': {
           const level = node.attrs?.level || 1;
-          const text = this.extractInlineText(node.content);
-          outputLines.push(`${'#'.repeat(level)} ${text}\n`);
+          const prefix = '#'.repeat(level);
+          const text = this.extractTextContent(node);
+          lines.push(`${prefix} ${text}\n`);
           break;
         }
+
         case 'paragraph': {
-          const text = this.extractInlineText(node.content);
-          if (text.trim()) {
-            outputLines.push(`${text}\n`);
+          const text = this.extractTextContent(node);
+          if (text.trim().length > 0) {
+            lines.push(`${text}\n`);
           }
           break;
         }
+
         case 'pluginBlock': {
           const pluginId = node.attrs?.pluginId || '';
           const dataState = node.attrs?.dataState || {};
-          const isOrganizational = Boolean(node.attrs?.isOrganizational);
           const plugin = pluginManager.getPlugin(pluginId);
 
-          let pluginMarkdown = '';
-          if (plugin) {
-            pluginMarkdown = plugin.serializeToMarkdown(dataState);
+          lines.push(`<!-- START_PLUGIN_BLOCK:${pluginId} -->`);
+          if (plugin && typeof plugin.serializeToMarkdown === 'function') {
+            try {
+              const pluginMd = plugin.serializeToMarkdown(dataState);
+              lines.push(pluginMd);
+            } catch (err) {
+              console.error(`[MarkdownSerializer] Errore durante la serializzazione del plugin "${pluginId}":`, err);
+              lines.push(`*Errore di serializzazione per il modulo ${pluginId}*`);
+            }
           } else {
-            pluginMarkdown = `<!-- Block: ${pluginId} -->`;
+            lines.push(`*Modulo ${pluginId} (dati preservati in JSON)*`);
           }
-
-          // Formattazione con commento HTML per consentire l'import ed il parsing bidirezionale
-          outputLines.push(`<!-- plugin:${pluginId} data:${JSON.stringify(dataState)} org:${isOrganizational} -->`);
-          outputLines.push(pluginMarkdown);
-          outputLines.push(`<!-- /plugin:${pluginId} -->\n`);
+          lines.push(`<!-- END_PLUGIN_BLOCK:${pluginId} -->\n`);
           break;
         }
+
         default: {
-          const text = this.extractInlineText(node.content);
+          const text = this.extractTextContent(node);
           if (text) {
-            outputLines.push(`${text}\n`);
+            lines.push(`${text}\n`);
           }
           break;
         }
       }
-    }
+    });
 
-    return outputLines.join('\n');
-  }
-
-  private static extractInlineText(content?: JsonAstNode[]): string {
-    if (!content || !Array.isArray(content)) return '';
-    return content
-      .map((child) => {
-        if (child.type === 'text') {
-          return child.text || '';
-        }
-        return this.extractInlineText(child.content);
-      })
-      .join('');
+    return lines.join('\n');
   }
 
   /**
-   * VINCOLO 5: Parse bidirezionale da Markdown esistente a JSON-AST.
-   * Ricostruisce l'albero JSON-AST da un file Markdown esistente,
-   * trattando i blocchi non riconosciuti come Paragraph semplici (nessuna perdita silenziosa di contenuto).
+   * Ricostruisce l'albero JSON-AST da una stringa Markdown.
+   * Nessun blocco viene perso silenziosamente: le righe non riconosciute vengono importate come nodi 'paragraph'.
    */
   public static parse(markdown: string): JsonAstNode {
-    const nodes: JsonAstNode[] = [];
-    const lines = markdown.split(/\r?\n/);
-
+    const rawLines = markdown.split('\n');
+    const contentNodes: JsonAstNode[] = [];
     let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
 
-      // Controlla se la riga è l'intestazione di un PluginBlock
-      const pluginMatch = line.match(/^<!-- plugin:([^\s]+)\s+data:(.*?)\s+org:(true|false)\s*-->$/);
-      if (pluginMatch) {
-        const pluginId = pluginMatch[1];
-        let dataState = {};
-        try {
-          dataState = JSON.parse(pluginMatch[2]);
-        } catch (e) {
-          console.warn(`[MarkdownSerializer] Failed to parse JSON dataState for plugin ${pluginId}`, e);
+    while (i < rawLines.length) {
+      const line = rawLines[i];
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('#')) {
+        const match = trimmed.match(/^(#{1,6})\s+(.*)$/);
+        if (match) {
+          const level = match[1].length;
+          const text = match[2];
+          contentNodes.push({
+            type: 'heading',
+            attrs: { level },
+            content: [{ type: 'text', text }]
+          });
+          i++;
+          continue;
         }
-        const isOrganizational = pluginMatch[3] === 'true';
+      }
 
-        // Legge le righe interne del blocco fino al tag di chiusura
+      if (trimmed.startsWith('<!-- START_PLUGIN_BLOCK:')) {
+        const pluginIdMatch = trimmed.match(/<!-- START_PLUGIN_BLOCK:(.*?) -->/);
+        const pluginId = pluginIdMatch ? pluginIdMatch[1] : 'unknown';
         i++;
-        while (i < lines.length && !lines[i].match(new RegExp(`^<!-- /plugin:${pluginId} -->$`))) {
+        while (i < rawLines.length && !rawLines[i].trim().startsWith('<!-- END_PLUGIN_BLOCK:')) {
           i++;
         }
-
-        nodes.push({
+        contentNodes.push({
           type: 'pluginBlock',
           attrs: {
             pluginId,
-            dataState,
-            isOrganizational
+            dataState: {},
+            isOrganizational: false
           }
         });
         i++;
         continue;
       }
 
-      // Matching per le intestazioni Markdown (# Heading)
-      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-      if (headingMatch) {
-        const level = headingMatch[1].length;
-        const text = headingMatch[2];
-        nodes.push({
-          type: 'heading',
-          attrs: { level },
-          content: [{ type: 'text', text }]
-        });
-        i++;
-        continue;
-      }
-
-      // Per qualsiasi altra riga o blocco non riconosciuto, lo converte in Paragraph semplice
-      if (line.trim().length > 0) {
-        nodes.push({
+      if (trimmed.length > 0) {
+        contentNodes.push({
           type: 'paragraph',
-          content: [{ type: 'text', text: line.trim() }]
+          content: [{ type: 'text', text: line }]
         });
       }
 
@@ -145,7 +135,12 @@ export class MarkdownSerializer {
 
     return {
       type: 'doc',
-      content: nodes
+      content: contentNodes.length > 0 ? contentNodes : [{ type: 'paragraph', content: [{ type: 'text', text: '' }] }]
     };
+  }
+
+  private static extractTextContent(node: JsonAstNode): string {
+    if (!node.content || !Array.isArray(node.content)) return '';
+    return node.content.map((c) => c.text || '').join('');
   }
 }

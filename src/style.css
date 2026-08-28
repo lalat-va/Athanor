@@ -1,8 +1,24 @@
 @import "tailwindcss";
-@import "leaflet/dist/leaflet.css";
-@import "leaflet-routing-machine/dist/leaflet-routing-machine.css";
 
-/* Resizer handle della sidebar */
+:root,
+[data-theme="nord"] {
+  --bg-primary: #0f172a;
+  --bg-secondary: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --border-color: #334155;
+  --accent-color: #3b82f6;
+}
+
+[data-theme="dracula"] {
+  --bg-primary: #282a36;
+  --bg-secondary: #44475a;
+  --text-primary: #f8f8f2;
+  --text-secondary: #6272a4;
+  --border-color: #6272a4;
+  --accent-color: #bd93f9;
+}
+
 #sidebar-resizer {
   cursor: col-resize;
   user-select: none;
@@ -15,29 +31,10 @@
   background-color: #3b82f6 !important;
 }
 
-.leaflet-map-element {
-  min-height: 400px;
-  width: 100%;
-  border-radius: 0.5rem;
-}
-
-/* Cursore a mirino visibile in modalità pick da mappa */
-.leaflet-crosshair-mode,
-.leaflet-crosshair-mode .leaflet-container,
-.leaflet-crosshair-mode .leaflet-interactive,
-.leaflet-crosshair-mode .leaflet-tile-container {
-  cursor: crosshair !important;
-}
-
-.custom-wp-marker {
-  background: transparent;
-  border: none;
-}
-
 .ProseMirror {
   outline: none;
   min-height: 320px;
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
 .ProseMirror p {
@@ -50,20 +47,5 @@
   font-weight: 700;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
-  color: #f8fafc;
-}
-
-/* Custom styling per Leaflet Routing Machine */
-.leaflet-routing-container {
-  background-color: rgba(15, 23, 42, 0.95) !important;
-  color: #f1f5f9 !important;
-  border: 1px solid #334155 !important;
-  border-radius: 0.5rem !important;
-  font-size: 11px !important;
-  max-width: 280px !important;
-}
-
-.leaflet-routing-alt {
-  max-height: 180px !important;
-  overflow-y: auto !important;
+  color: var(--text-primary);
 }

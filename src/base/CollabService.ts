@@ -1,86 +1,160 @@
+/**
+ * Ecosistema Digitale per il Terzo Settore
+ * Licenza: GNU GPL v.3
+ *
+ * ⚠️ ATTENZIONE: VERSIONE DEMO / TESTING PRE-ALPHA ⚠️
+ * Questo software viene rilasciato esclusivamente a scopo dimostrativo e di test (Stato: Pre-Alpha).
+ * L'autore e i collaboratori non si assumono alcuna responsabilità per perdita di dati,
+ * malfunzionamenti o danni di qualsiasi genere derivanti dall'uso di questa applicazione.
+ */
+
 import * as Y from 'yjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
+import { db } from './Database.js';
 import { StorageAdapter } from '../modules/StorageAdapter.js';
-import { JsonAstNode } from './Database.js';
+import { CollabNetworkProvider } from './CollabNetworkProvider.js';
 
-export interface UserPresence {
+export interface UserPresenceState {
   name: string;
   color: string;
-  [key: string]: any;
+  cursor?: { x: number; y: number };
+  avatarUrl?: string;
 }
 
 export class CollabService {
+  private static instance: CollabService | null = null;
   public doc: Y.Doc;
-  public indexeddbProvider: IndexeddbPersistence;
+  public provider: IndexeddbPersistence;
+  public networkProvider: CollabNetworkProvider;
   public awareness: Awareness;
-  private storageAdapter: StorageAdapter;
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private docId: string;
+  private storageAdapter: StorageAdapter | null = null;
   private unsubscribeRemote: (() => void) | null = null;
 
-  constructor(docId: string, storageAdapter: StorageAdapter) {
+  public constructor(docId: string = 'doc-default', storageAdapter?: StorageAdapter, spaceId: string = 'space-default') {
     this.docId = docId;
-    this.storageAdapter = storageAdapter;
-
-    // 1. Inizializza l'istanza Y.Doc di Yjs associata all'editor
+    this.storageAdapter = storageAdapter || null;
     this.doc = new Y.Doc();
 
-    // 2. VINCOLO 2: Persistenza locale del Y.Doc tramite y-indexeddb.
-    // Il Y.Doc è l'UNICA sorgente di verità del contenuto vivo ed in co-editing.
-    this.indexeddbProvider = new IndexeddbPersistence(`yjs-doc-${docId}`, this.doc);
-
-    // 3. Predisposizione metadati di presenza (cursori remoti e awareness utenti via y-protocols/awareness)
+    // Persistenza locale asincrona via y-indexeddb
+    this.provider = new IndexeddbPersistence(this.docId, this.doc);
     this.awareness = new Awareness(this.doc);
 
-    // 4. Predisposizione scambio dei delta di modifica con StorageAdapter.pushUpdate
+    // Provider di Rete Ibrido Real-Time (WebRTC P2P con AES-GCM + WebSocket Relay)
+    this.networkProvider = new CollabNetworkProvider(this.doc, this.docId, spaceId, {
+      enableWebRTC: true,
+      enableWebSocket: false
+    });
+
+    this.provider.on('synced', () => {
+      console.log(`[CollabService] Stato Y.Doc "${this.docId}" sincronizzato con y-indexeddb.`);
+    });
+
+    // Ascolto aggiornamenti Y.Doc con debounce di 500ms (Soluzione Write Amplification)
     this.doc.on('update', (update: Uint8Array, origin: any) => {
-      // Evita loop di eco degli aggiornamenti applicati da origine remota
-      if (origin !== 'remote-sync') {
-        this.storageAdapter.pushUpdate(this.docId, update);
-      }
+      this.handleDocUpdate(update, origin);
     });
 
-    // 5. Ricezione degli aggiornamenti remoti tramite StorageAdapter.onRemoteUpdate
-    this.unsubscribeRemote = this.storageAdapter.onRemoteUpdate(this.docId, (update: Uint8Array) => {
-      Y.applyUpdate(this.doc, update, 'remote-sync');
-    });
+    if (this.storageAdapter) {
+      this.unsubscribeRemote = this.storageAdapter.onRemoteUpdate(this.docId, (remoteUpdate: Uint8Array) => {
+        Y.applyUpdate(this.doc, remoteUpdate, 'remote');
+      });
+    }
+  }
+
+  public static getInstance(docId: string = 'doc-default', storageAdapter?: StorageAdapter, spaceId: string = 'space-default'): CollabService {
+    if (!CollabService.instance || CollabService.instance.docId !== docId) {
+      CollabService.instance = new CollabService(docId, storageAdapter, spaceId);
+    }
+    return CollabService.instance;
   }
 
   /**
-   * Configura lo stato di presenza locale dell'utente per l'Awareness.
+   * Soluzione alla Write Amplification: Debounce di 500ms
+   * Impedisce la saturazione di Dexie ad ogni singolo keystroke.
    */
-  public setUserPresence(user: UserPresence): void {
-    this.awareness.setLocalStateField('user', user);
-  }
-
-  /**
-   * VINCOLO 2: Metodo per rigenerare il JSON-AST (vista derivata per la colonna documents.body di Dexie)
-   * a partire dallo stato corrente del Y.Doc.
-   */
-  public exportDerivedJsonAst(): JsonAstNode {
-    const documentMap = this.doc.getMap('documentAST');
-    const nodesArray = documentMap.get('nodes') as Y.Array<any> | undefined;
-
-    if (nodesArray) {
-      return {
-        type: 'doc',
-        content: nodesArray.toJSON() as JsonAstNode[]
-      };
+  private handleDocUpdate(update: Uint8Array, origin: any): void {
+    if (origin !== 'remote' && this.storageAdapter) {
+      this.storageAdapter.pushUpdate(this.docId, update).catch((err) => {
+        console.error('[CollabService] Errore durante l\'invio del delta Yjs allo StorageAdapter:', err);
+      });
     }
 
-    // Struttura JSON-AST di fallback derivata dal Y.Doc
-    return {
-      type: 'doc',
-      content: []
-    };
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(async () => {
+      await this.saveDerivedSnapshot();
+    }, 500);
+  }
+
+  /**
+   * Genera la vista materializzata JSON-AST dal Y.Doc e la salva in Dexie
+   */
+  private async saveDerivedSnapshot(): Promise<void> {
+    try {
+      const derivedJsonAst = this.exportDerivedJsonAst();
+      const existing = await db.documents.get(this.docId);
+
+      await db.documents.put({
+        id: this.docId,
+        title: existing?.title || 'Documento Gestionale',
+        lastModified: Date.now(),
+        status: existing?.status || 'draft',
+        sectorId: existing?.sectorId,
+        metadata: existing?.metadata || {},
+        body: derivedJsonAst
+      });
+
+      console.log(`[CollabService] Vista materializzata JSON-AST salvata in Dexie (docId: ${this.docId})`);
+    } catch (error) {
+      console.error('[CollabService] Errore durante il salvataggio della vista materializzata:', error);
+    }
+  }
+
+  /**
+   * Esporta l'albero sintattico JSON-AST dal Y.Doc
+   */
+  public exportDerivedJsonAst(): any {
+    const xmlFragment = this.doc.getXmlFragment('prosemirror');
+    const jsonAstMap = this.doc.getMap('document-ast');
+    return jsonAstMap.toJSON() || { type: 'doc', content: xmlFragment.toJSON() };
+  }
+
+  /**
+   * Aggiorna lo stato di presenza e posizione del cursore dell'utente corrente (Awareness)
+   */
+  public setUserPresence(user: UserPresenceState): void {
+    this.awareness.setLocalStateField('user', {
+      name: user.name,
+      color: user.color,
+      cursor: user.cursor || null,
+      avatarUrl: user.avatarUrl || null
+    });
+  }
+
+  /**
+   * Ottiene tutti gli utenti connessi simultaneamente con la loro presenza
+   */
+  public getActivePresences(): Map<number, UserPresenceState> {
+    const states = new Map<number, UserPresenceState>();
+    this.awareness.getStates().forEach((state, clientID) => {
+      if (state.user) {
+        states.set(clientID, state.user as UserPresenceState);
+      }
+    });
+    return states;
   }
 
   public destroy(): void {
-    if (this.unsubscribeRemote) {
-      this.unsubscribeRemote();
-    }
-    this.awareness.destroy();
-    this.indexeddbProvider.destroy();
+    if (this.debounceTimer) clearTimeout(this.debounceTimer);
+    if (this.unsubscribeRemote) this.unsubscribeRemote();
+    if (this.networkProvider) this.networkProvider.destroy();
+    this.provider.destroy();
     this.doc.destroy();
+    CollabService.instance = null;
   }
 }

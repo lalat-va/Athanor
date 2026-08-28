@@ -1,76 +1,91 @@
+/**
+ * Ecosistema Digitale per il Terzo Settore
+ * Licenza: GNU GPL v.3
+ *
+ * ⚠️ ATTENZIONE: VERSIONE DEMO / TESTING PRE-ALPHA ⚠️
+ * Questo software viene rilasciato esclusivamente a scopo dimostrativo e di test (Stato: Pre-Alpha).
+ * L'autore e i collaboratori non si assumono alcuna responsabilità per perdita di dati,
+ * malfunzionamenti o danni di qualsiasi genere derivanti dall'uso di questa applicazione.
+ */
+
 import { Dexie, type Table } from 'dexie';
 
-export type DocumentStatus = 'draft' | 'published' | 'revision';
-
-/**
- * Interfaccia del nodo JSON-AST per il corpo del documento (vista derivata).
- */
 export interface JsonAstNode {
   type: string;
   attrs?: Record<string, any>;
   content?: JsonAstNode[];
   text?: string;
+  marks?: Array<{ type: string; attrs?: Record<string, any> }>;
 }
 
-/**
- * Record della tabella 'documents'.
- */
 export interface DocumentRecord {
   id: string;
   title: string;
   lastModified: number;
-  status: DocumentStatus;
-
-  /**
-   * VINCOLO 4: I permessi in metadata sono SOLO stato UI-facing.
-   * Non costituiscono un meccanismo di sicurezza: l'enforcement reale dei permessi
-   * è responsabilità dello StorageAdapter/backend remoto.
-   */
-  metadata: {
-    permissions?: string[];
-    roles?: string[];
-    groups?: string[];
-    [key: string]: any;
-  };
-
-  /**
-   * VINCOLO 2: Il Y.Doc è l'unica fonte di verità del contenuto vivo.
-   * Va persistito localmente tramite y-indexeddb. Il campo 'body' (JSON-AST) nella tabella
-   * 'documents' di Dexie è una VISTA DERIVATA E MATERIALIZZATA, rigenerata a ogni salvataggio/sync
-   * a partire dal Y.Doc — non va mai editata direttamente né trattata come sorgente concorrente di verità.
-   */
-  body: JsonAstNode;
+  status: 'draft' | 'published' | 'archived';
+  sectorId?: string;
+  metadata?: Record<string, any>;
+  body?: JsonAstNode | any;
 }
 
-/**
- * Record della tabella 'settings' per memorizzare le preferenze globali (es. lingua di sistema attiva).
- */
 export interface SettingRecord {
   key: string;
   value: any;
+  lastUpdated: number;
+}
+
+export interface TelemetryLogRecord {
+  logId: string;
+  userId: string;
+  documentId?: string;
+  spaceId?: string;
+  sessionStart: number;
+  sessionEnd?: number;
+  metrics?: Record<string, any>;
+}
+
+export interface RubricaContactRecord {
+  contactId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  birthDate?: string;
+  isInternal: boolean;
+  deleted: boolean;
+  metadata?: Record<string, any>;
 }
 
 export class LocalDatabase extends Dexie {
-  documents!: Table<DocumentRecord, string>;
-  settings!: Table<SettingRecord, string>;
+  public documents!: Table<DocumentRecord, string>;
+  public settings!: Table<SettingRecord, string>;
+  public telemetry_logs!: Table<TelemetryLogRecord, string>;
+  public rubrica!: Table<RubricaContactRecord, string>;
 
   constructor() {
     super('AthanorLocalDB');
 
-    // Dichiarazione esplicita della versione dello schema per abilitare future migrazioni
     this.version(1).stores({
-      documents: 'id, title, lastModified, status',
-      settings: 'key'
+      documents: '&id, title, lastModified, status, sectorId',
+      settings: '&key, value, lastUpdated',
+      telemetry_logs: '&logId, userId, documentId, spaceId, sessionStart, sessionEnd',
+      rubrica: '&contactId, firstName, lastName, email, phone, birthDate, isInternal, deleted'
     });
-  }
 
-  public async getSetting(key: string): Promise<any> {
-    const record = await this.settings.get(key);
-    return record ? record.value : undefined;
-  }
-
-  public async setSetting(key: string, value: any): Promise<void> {
-    await this.settings.put({ key, value });
+    this.on('ready', async () => {
+      try {
+        const demoSetting = await this.settings.get('core.is_demo_mode');
+        if (!demoSetting) {
+          await this.settings.put({
+            key: 'core.is_demo_mode',
+            value: true,
+            lastUpdated: Date.now()
+          });
+        }
+      } catch (e) {
+        console.warn('[Database] Errore nell\'inizializzazione del setting core.is_demo_mode:', e);
+      }
+    });
   }
 }
 

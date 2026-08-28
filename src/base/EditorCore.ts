@@ -1,15 +1,25 @@
+/**
+ * Ecosistema Digitale per il Terzo Settore
+ * Licenza: GNU GPL v.3
+ *
+ * ⚠️ ATTENZIONE: VERSIONE DEMO / TESTING PRE-ALPHA ⚠️
+ * Questo software viene rilasciato esclusivamente a scopo dimostrativo e di test (Stato: Pre-Alpha).
+ * L'autore e i collaboratori non si assumono alcuna responsabilità per perdita di dati,
+ * malfunzionamenti o danni di qualsiasi genere derivanti dall'uso di questa applicazione.
+ */
+
 import { Editor, Node, mergeAttributes } from '@tiptap/core';
 import Document from '@tiptap/extension-document';
 import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import Heading from '@tiptap/extension-heading';
-import { PluginManager } from './PluginManager.js';
+import { PluginManager } from '../plugins/PluginManager.js';
 import { I18nManager } from './I18nManager.js';
 
 /**
- * VINCOLO 1: TipTap come editor strutturato, non come rich-text editor.
- * Le estensioni di formattazione libera da StarterKit sono ESPLICITAMENTE DISABILITATE.
- * L'unico modo per l'utente di inserire contenuto è tramite comandi che generano nodi PluginBlock.
+ * VINCOLO FONDAMENTALE: TipTap come editor strutturato semantico, non come rich-text editor libero.
+ * Le estensioni di formattazione libera da StarterKit (bold, italic, elenchi non vincolati) sono ESPLICITAMENTE DISABILITATE.
+ * L'unico modo per inserire contenuto strutturato è tramite il nodo 'pluginBlock'.
  */
 export const PluginBlockNode = Node.create({
   name: 'pluginBlock',
@@ -44,7 +54,7 @@ export const PluginBlockNode = Node.create({
           try {
             dataState = JSON.parse(element.getAttribute('data-state') || '{}');
           } catch (e) {
-            console.warn('[PluginBlockNode] Failed to parse data-state attribute:', e);
+            console.warn('[PluginBlockNode] Impossibile parsare l\'attributo data-state:', e);
           }
           return {
             pluginId: element.getAttribute('data-plugin-id') || '',
@@ -70,7 +80,6 @@ export const PluginBlockNode = Node.create({
 
   /**
    * NodeView per PluginBlock con isolamento completo degli eventi ProseMirror (stopEvent & ignoreMutation).
-   * Questo impedisce che l'immissione di testo negli input HTML interni faccia collassare o ri-renderizzare la NodeView.
    */
   addNodeView() {
     return ({ node }) => {
@@ -92,24 +101,16 @@ export const PluginBlockNode = Node.create({
       if (plugin) {
         plugin.render(container, node.attrs.dataState, i18n.getLocale());
       } else {
-        container.innerHTML = `<div class="text-red-500 text-sm font-medium italic">Plugin non trovato: ${node.attrs.pluginId}</div>`;
+        container.innerHTML = `<div class="text-slate-400 text-xs italic p-2 border border-dashed border-slate-700 rounded bg-slate-950/40">In attesa del widget plugin: <span class="font-bold font-mono text-blue-400">${node.attrs.pluginId}</span></div>`;
       }
 
       return {
         dom: container,
 
-        /**
-         * Impedisce a ProseMirror di intercettare gli eventi (keydown, click, input)
-         * che avvengono all'interno del widget del plugin.
-         */
         stopEvent() {
           return true;
         },
 
-        /**
-         * Comunica a ProseMirror di ignorare le mutazioni DOM interne al plugin,
-         * evitando che l'editor distrugga ed il re-renderizzi il DOM ad ogni digitazione.
-         */
         ignoreMutation() {
           return true;
         },
