@@ -171,6 +171,10 @@ export class EditorCore {
     }).run();
   }
 
+  public setContent(content: any): void {
+    this.editor.commands.setContent(content);
+  }
+
   public destroy(): void {
     this.editor.destroy();
   }

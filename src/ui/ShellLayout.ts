@@ -10,8 +10,17 @@
 
 import { eventBus, EventBus, SyncStatusType } from '../base/EventBus.js';
 import { i18nManager, I18nManager } from '../base/I18nManager.js';
+import { db } from '../base/Database.js';
+import { permissionManager } from '../modules/PermissionManager.js';
 
 export type ThemeType = 'nord' | 'dracula';
+
+export interface WorkspaceItem {
+  spaceId: string;
+  name: string;
+  category: string;
+  userRole: string;
+}
 
 export class ShellLayout {
   private container: HTMLElement;
@@ -19,6 +28,14 @@ export class ShellLayout {
   private i18n: I18nManager;
   private currentSyncStatus: SyncStatusType = 'synced';
   private currentTheme: ThemeType = 'nord';
+  private currentActiveSpaceId: string = 'space-default';
+
+  private defaultWorkspaces: WorkspaceItem[] = [
+    { spaceId: 'space-default', name: '📦 Spazio Operativo Generale', category: 'Generale', userRole: 'Responsabile Legale / Amministratore' },
+    { spaceId: 'space_coca', name: '🏛️ Co.Ca. / Direzione (Direttivo)', category: 'Direzione', userRole: 'Responsabile Legale' },
+    { spaceId: 'space_reparto', name: '⛺ Branca Esploratori / Reparto Orione', category: 'Settore', userRole: 'Responsabile di Spazio' },
+    { spaceId: 'space_magazzino', name: '🛠️ Magazzino & Logistica Materials', category: 'Logistica', userRole: 'Preposto / Editor' }
+  ];
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -26,6 +43,18 @@ export class ShellLayout {
     this.i18n = i18nManager;
 
     this.setupSyncListener();
+    this.loadSavedActiveSpace();
+  }
+
+  private async loadSavedActiveSpace(): Promise<void> {
+    try {
+      const saved = await db.settings.get('core.active_space_id');
+      if (saved && saved.value) {
+        this.currentActiveSpaceId = saved.value;
+      }
+    } catch (e) {
+      console.warn('[ShellLayout] Impossibile caricare lo Spazio attivo salvato:', e);
+    }
   }
 
   private setupSyncListener(): void {
@@ -74,7 +103,6 @@ export class ShellLayout {
         <div class="flex-1 grid grid-cols-12 overflow-hidden">
           
           <!-- SIDEBAR DI SINISTRA (DIVISA IN 2 SEZIONI: SPAZI/INFO SUPERIORE + UTILITÀ INFERIORE) -->
-          <!-- Si adatta dinamicamente: 12/12 su Mobile, 4/12 su Tablet, 3/12 su Desktop -->
           <aside class="col-span-12 lg:col-span-4 xl:col-span-3 h-full border-b lg:border-b-0 lg:border-r border-[var(--border-color,#1e293b)] bg-[var(--bg-secondary,#0f172a)] p-4 overflow-y-auto text-xs flex flex-col justify-between gap-6 shrink-0">
             
             <!-- SEZIONE 1 (SUPERIORE): PROGETTI, SPAZI & INFORMAZIONI SPAZIO -->
@@ -85,16 +113,31 @@ export class ShellLayout {
                 <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                   <span>📁 Spazi & Progetti</span>
                 </h3>
-                <nav class="space-y-1 text-xs">
+
+                <!-- SELETTORE CAMBIO SPAZIO DI LAVORO (WORKSPACE SWITCHER) -->
+                <div class="space-y-1.5 bg-slate-900/90 p-3 rounded-lg border border-blue-900/60 shadow-md">
+                  <label class="block text-[11px] font-bold text-blue-400 flex items-center justify-between">
+                    <span>📦 Spazio di Lavoro Attivo:</span>
+                    <span id="active-space-badge" class="text-[10px] bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-800 font-mono">${this.currentActiveSpaceId}</span>
+                  </label>
+
+                  <div class="relative">
+                    <select id="workspace-switcher-select" class="w-full bg-slate-950 border border-slate-700 hover:border-blue-500 rounded px-2.5 py-1.5 text-slate-100 text-xs font-semibold focus:outline-none focus:border-blue-500 transition-colors cursor-pointer">
+                      <option value="">Caricamento Spazi di Lavoro...</option>
+                    </select>
+                  </div>
+                </div>
+
+                <nav class="space-y-1 text-xs pt-2">
                   <a href="#" class="flex items-center gap-2 px-3 py-2 rounded bg-blue-950 text-blue-200 border border-blue-800 font-semibold">
                     📋 Spazio Documenti & Verbali
                   </a>
-                  <a href="#" class="flex items-center gap-2 px-3 py-2 rounded text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    👥 Rubrica Anagrafica
-                  </a>
-                  <a href="#" class="flex items-center gap-2 px-3 py-2 rounded text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors">
-                    ⚙️ Impostazioni Ente
-                  </a>
+                  <button id="nav-rubrica-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer">
+                    👥 Rubrica Anagrafica (IdP)
+                  </button>
+                  <button id="nav-settings-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer">
+                    ⚙️ Impostazioni Permessi & Spazi
+                  </button>
                 </nav>
               </div>
 
@@ -104,27 +147,45 @@ export class ShellLayout {
                   <span>ℹ️ Informazioni Spazio</span>
                 </h3>
                 <div class="space-y-2 text-slate-400 bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                  <div><strong class="text-slate-200">ID Spazio Attivo:</strong> <span id="info-space-id" class="text-blue-300 font-mono">${this.currentActiveSpaceId}</span></div>
                   <div><strong class="text-slate-200">Stato Documento:</strong> DRAFT</div>
-                  <div><strong class="text-slate-200">Permessi Utente:</strong> Read / Write</div>
-                  <div><strong class="text-slate-200">Integrità SHA-256:</strong> In attesa di pubblicazione</div>
+                  <div><strong class="text-slate-200">Permessi Utente:</strong> <span id="info-user-permissions" class="text-emerald-400 font-bold">Read / Write</span></div>
+                  <div><strong class="text-slate-200">Integrità SHA-256:</strong> Sincronizzato</div>
                 </div>
               </div>
 
             </div>
 
-            <!-- SEZIONE 2 (INFERIORE): UTILITÀ & STRUMENTI (PULSANTE LANCIO MAPPE) -->
+            <!-- SEZIONE 2 (INFERIORE): UTILITÀ & STRUMENTI (PULSANTI LANCIO PLUGIN) -->
             <div class="pt-4 border-t border-slate-800 space-y-3">
               <h3 class="font-bold text-slate-200 border-b border-slate-800 pb-2 flex items-center gap-1.5">
                 <span>🛠️ Utilità & Strumenti</span>
               </h3>
               <p class="text-[11px] text-slate-400 leading-relaxed">
-                Clicca sul pulsante sottostante per integrare ed attivare il modulo cartografico nel canvas centrale:
+                Clicca su uno degli strumenti per integrarlo ed attivarlo nel canvas centrale:
               </p>
               
-              <button id="btn-launch-map-plugin" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-2.5 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer">
-                <span class="text-base group-hover:scale-110 transition-transform">🗺️</span>
-                <span>Mappe & Spostamenti</span>
-              </button>
+              <div class="space-y-2">
+                <button id="btn-launch-permissions-plugin" class="w-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">🔐</span>
+                  <span>Permessi & Spazi (RBAC)</span>
+                </button>
+
+                <button id="btn-launch-contacts-plugin" class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">📇</span>
+                  <span>Rubrica & Anagrafica</span>
+                </button>
+
+                <button id="btn-launch-map-plugin" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">🗺️</span>
+                  <span>Mappe & Spostamenti</span>
+                </button>
+
+                <button id="btn-launch-task-plugin" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">✅</span>
+                  <span>Smart Task Manager</span>
+                </button>
+              </div>
 
               <div class="text-[10px] text-slate-500 pt-2 border-t border-slate-800/60">
                 Stato Offline-First attivo
@@ -134,7 +195,6 @@ export class ShellLayout {
           </aside>
 
           <!-- MAIN EDITOR CANVAS (DESTRO/CENTRALE): Si adatta dinamicamente alla larghezza -->
-          <!-- 12/12 su Mobile, 8/12 su Tablet, 9/12 su Desktop -->
           <main class="col-span-12 lg:col-span-8 xl:col-span-9 h-full p-4 overflow-y-auto bg-[var(--bg-primary,#0f172a)] flex flex-col">
             <div id="shell-editor-mount" class="flex-1 border border-[var(--border-color,#1e293b)] rounded-lg p-4 bg-[var(--bg-secondary,#1e293b)] shadow-xl overflow-y-auto min-h-[500px]"></div>
           </main>
@@ -156,6 +216,7 @@ export class ShellLayout {
     `;
 
     this.bindEvents();
+    this.populateWorkspaceSwitcher();
   }
 
   private renderSyncIndicatorHTML(): string {
@@ -178,10 +239,94 @@ export class ShellLayout {
     }
   }
 
+  /**
+   * POPOLAMENTO DINAMICO DEGLI SPAZI DI LAVORO DISPONIBILI PER L'UTENTE
+   */
+  private async populateWorkspaceSwitcher(): Promise<void> {
+    const switcherSelect = this.container.querySelector<HTMLSelectElement>('#workspace-switcher-select');
+    if (!switcherSelect) return;
+
+    try {
+      const activeUserEmail = 'test.athanor2@gmail.com';
+      const isAuthorizedAdmin = permissionManager.canUserManagePermissions(activeUserEmail, ['RESPONSIBLE_LEGAL']);
+
+      let userWorkspaces: WorkspaceItem[] = [...this.defaultWorkspaces];
+
+      // Se l'utente non è amministratore/responsabile legale, filtra solo gli spazi assegnati
+      if (!isAuthorizedAdmin) {
+        const contact = await db.rubrica.filter((c) => c.email.toLowerCase() === activeUserEmail.toLowerCase()).first();
+        if (contact && contact.metadata?.fullRecord?.organizationalProfile?.associatedRoles) {
+          const assignedSpaceIds = contact.metadata.fullRecord.organizationalProfile.associatedRoles.map((r: any) => r.spaceId);
+          userWorkspaces = this.defaultWorkspaces.filter((w) => assignedSpaceIds.includes(w.spaceId) || w.spaceId === 'space-default');
+        }
+      }
+
+      switcherSelect.innerHTML = userWorkspaces
+        .map(
+          (w) => `
+        <option value="${w.spaceId}" ${w.spaceId === this.currentActiveSpaceId ? 'selected' : ''}>
+          ${w.name}
+        </option>
+      `
+        )
+        .join('');
+
+      this.updateActiveSpaceUI(this.currentActiveSpaceId);
+    } catch (e) {
+      console.warn('[ShellLayout] Errore popolamento Workspace Switcher:', e);
+    }
+  }
+
+  private updateActiveSpaceUI(spaceId: string): void {
+    const activeBadge = this.container.querySelector('#active-space-badge');
+    const infoSpaceId = this.container.querySelector('#info-space-id');
+    const infoPermissions = this.container.querySelector('#info-user-permissions');
+
+    if (activeBadge) activeBadge.textContent = spaceId;
+    if (infoSpaceId) infoSpaceId.textContent = spaceId;
+
+    const canManage = permissionManager.canUserManagePermissions('test.athanor2@gmail.com', ['RESPONSIBLE_LEGAL']);
+    if (infoPermissions) {
+      infoPermissions.textContent = canManage ? 'Read / Write (Amministratore)' : 'Read Only (Volontario)';
+      infoPermissions.className = canManage ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold';
+    }
+  }
+
   private bindEvents(): void {
     this.container.querySelector('#theme-selector')?.addEventListener('change', (e) => {
       this.currentTheme = (e.target as HTMLSelectElement).value as ThemeType;
       this.container.setAttribute('data-theme', this.currentTheme);
+    });
+
+    // EVENT LISTENER WORKSPACE SWITCHER (CAMBIO SPAZIO DI LAVORO)
+    this.container.querySelector('#workspace-switcher-select')?.addEventListener('change', async (e) => {
+      const selectedSpaceId = (e.target as HTMLSelectElement).value;
+      if (!selectedSpaceId) return;
+
+      const workspace = this.defaultWorkspaces.find((w) => w.spaceId === selectedSpaceId);
+      const spaceName = workspace ? workspace.name : selectedSpaceId;
+
+      this.currentActiveSpaceId = selectedSpaceId;
+      this.updateActiveSpaceUI(selectedSpaceId);
+
+      // Salva lo spazio attivo nelle impostazioni Dexie
+      try {
+        await db.settings.put({
+          key: 'core.active_space_id',
+          value: selectedSpaceId,
+          lastUpdated: Date.now()
+        });
+      } catch (err) {
+        console.warn('[ShellLayout] Errore nel salvataggio dello Spazio attivo:', err);
+      }
+
+      console.log(`[ShellLayout] 🔄 CAMBIO SPAZIO DI LAVORO ESEGUITO: "${selectedSpaceId}" (${spaceName})`);
+
+      // Emotione evento globale di cambio spazio per aggiornare la visuale dei dati ed il Y.Doc
+      this.bus.emit('space:changed', {
+        spaceId: selectedSpaceId,
+        spaceName
+      });
     });
 
     this.container.querySelector('#btn-show-disclaimer')?.addEventListener('click', () => {
@@ -194,10 +339,34 @@ export class ShellLayout {
       this.render();
     });
 
-    // Event listener per il pulsante nella Sezione 2 della Sidebar sinistra (Utilità & Strumenti)
+    // Event listener per la Rubrica
+    const triggerRubrica = () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Rubrica (contacts-tool)...');
+      this.bus.emit('plugin:launch', { pluginId: 'contacts-tool' });
+    };
+
+    this.container.querySelector('#nav-rubrica-btn')?.addEventListener('click', triggerRubrica);
+    this.container.querySelector('#btn-launch-contacts-plugin')?.addEventListener('click', triggerRubrica);
+
+    // Event listener per Permessi & Spazi
+    const triggerPermissions = () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Permessi & Spazi (permissions-tool)...');
+      this.bus.emit('plugin:launch', { pluginId: 'permissions-tool' });
+    };
+
+    this.container.querySelector('#nav-settings-btn')?.addEventListener('click', triggerPermissions);
+    this.container.querySelector('#btn-launch-permissions-plugin')?.addEventListener('click', triggerPermissions);
+
+    // Event listener per Mappe
     this.container.querySelector('#btn-launch-map-plugin')?.addEventListener('click', () => {
       console.log('[ShellLayout] Richiesta attivazione Plugin Mappe...');
       this.bus.emit('plugin:launch', { pluginId: 'map-tool' });
+    });
+
+    // Event listener per Task Manager
+    this.container.querySelector('#btn-launch-task-plugin')?.addEventListener('click', () => {
+      console.log('[ShellLayout] Richiesta attivazione Task Manager...');
+      this.bus.emit('plugin:launch', { pluginId: 'task-tool' });
     });
   }
 

@@ -10,11 +10,36 @@
 
 export type SyncStatusType = 'offline' | 'connecting' | 'synced' | 'error';
 
+export interface TaskItemAttributes {
+  taskId: string;
+  parentId?: string | null;
+  taskType: 'OPERATIVO' | 'AMMINISTRATIVO' | 'BUROCRATICO';
+  category: 'GENERALE' | 'MAGAZZINO' | 'RENDICONTAZIONE' | 'MENU';
+  description: string;
+  dueDate?: string | null;
+  assigneeId?: string | null;
+  completed: boolean;
+  completedAt?: number | null;
+  completedBy?: string | null;
+  openedBy: string;
+  interaction?: {
+    actionType?: 'ACQUISTA' | 'PRELEVA' | 'RENDICONTA' | 'NESSUNA';
+    targetItemId?: string | null;
+    quantity?: number;
+    cost?: number;
+    payload?: Record<string, any>;
+  };
+}
+
 export interface EventMap {
   'i18n:locale_changed': string;
   'todo:created': any;
   'todo:completed': any;
+  'task:created': TaskItemAttributes;
+  'task:completed': TaskItemAttributes;
+  'task:updated': TaskItemAttributes;
   'sync:status': SyncStatusType;
+  'space:changed': { spaceId: string; spaceName: string };
   [key: string]: any;
 }
 

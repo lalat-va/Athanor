@@ -14,6 +14,11 @@ import { eventBus } from './base/EventBus.js';
 import { i18nManager } from './base/I18nManager.js';
 import { pluginManager } from './plugins/PluginManager.js';
 import { MapPlugin } from './plugins/MapPlugin.js';
+import { TaskPlugin } from './plugins/TaskPlugin.js';
+import { ContactsPlugin } from './plugins/ContactsPlugin.js';
+import { PermissionsPlugin } from './plugins/PermissionsPlugin.js';
+import { automationEngine } from './modules/AutomationEngine.js';
+import { permissionManager } from './modules/PermissionManager.js';
 import { CollabService } from './base/CollabService.js';
 import { LocalStorageAdapter } from './modules/StorageAdapter.js';
 import { MockAuthAdapter } from './modules/AuthAdapter.js';
@@ -29,9 +34,15 @@ async function bootstrapApp(): Promise<void> {
   const authAdapter = new MockAuthAdapter();
   await i18nManager.init(db, eventBus);
 
-  // 2. Registrazione Plugin v3 "Mappe, Tracciati & Spostamenti"
+  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP) e Permessi & Spazi (RBAC)
   const mapPlugin = new MapPlugin();
+  const taskPlugin = new TaskPlugin();
+  const contactsPlugin = new ContactsPlugin();
+  const permissionsPlugin = new PermissionsPlugin();
   await pluginManager.registerPlugin(mapPlugin);
+  await pluginManager.registerPlugin(taskPlugin);
+  await pluginManager.registerPlugin(contactsPlugin);
+  await pluginManager.registerPlugin(permissionsPlugin);
 
   // 3. Avvio del monitor di sicurezza attivo ActiveKillSwitch (Remote Wipe Polling)
   const activeKillSwitch = ActiveKillSwitch.getInstance(storageAdapter);
@@ -39,23 +50,67 @@ async function bootstrapApp(): Promise<void> {
 
   // 4. Inizializzazione CollabService (Yjs + y-indexeddb + CollabNetworkProvider WebRTC P2P)
   const docId = 'doc-associazione-001';
-  const collabService = new CollabService(docId, storageAdapter, 'space-default');
+  const spaceId = 'space-default';
+  const collabService = new CollabService(docId, storageAdapter, spaceId);
   collabService.setUserPresence({ name: 'Operatore Ente', color: '#2563eb' });
 
-  console.log('[Bootstrap] Moduli base e Plugin Mappe v3 registrati con successo:', { pluginManager, collabService });
+  // 5. Collegamento Y.Doc condiviso al ContactsPlugin, PermissionManager e AutomationEngine
+  contactsPlugin.registerYDoc(collabService.doc);
+  permissionManager.registerYDoc(spaceId, collabService.doc);
+  automationEngine.registerYDoc(spaceId, collabService.doc);
 
-  // 5. Controllo Modalità Demo e Onboarding Bloccante del Responsabile Legale su Dexie Rubrica
+  console.log('[Bootstrap] Moduli base, Rubrica (IdP), Permessi (RBAC), Mappe e Task Manager registrati:', {
+    pluginManager,
+    collabService,
+    automationEngine,
+    contactsPlugin,
+    permissionsPlugin
+  });
+
+  // 6. Allineamento Permessi & Controllo Onboarding Responsabile Legale
+  await ensureLegalRepresentativePermissions();
   const isDemoMode = await checkIsDemoMode();
   const hasLegalRep = await checkLegalRepresentativeExists();
 
   const appRoot = document.querySelector<HTMLDivElement>('#app') || document.body;
 
   if (!hasLegalRep) {
-    showBlockingOnboardingModal(appRoot, isDemoMode, authAdapter, async () => {
-      await initializeMainShell(appRoot, docId, mapPlugin);
+    showBlockingOnboardingModal(appRoot, isDemoMode, authAdapter, contactsPlugin, async () => {
+      await initializeMainShell(appRoot, docId, mapPlugin, contactsPlugin, permissionsPlugin);
     });
   } else {
-    await initializeMainShell(appRoot, docId, mapPlugin);
+    await initializeMainShell(appRoot, docId, mapPlugin, contactsPlugin, permissionsPlugin);
+  }
+}
+
+/**
+ * Allinea e garantisce i permessi completi di Responsabile Legale ed Administrator per Alessio Folli (test.athanor2@gmail.com) e qualsiasi RL
+ */
+async function ensureLegalRepresentativePermissions(): Promise<void> {
+  try {
+    const contacts = await db.rubrica.toArray();
+    for (const c of contacts) {
+      const isLegal =
+        c.metadata?.role === 'Responsabile Legale' ||
+        c.metadata?.role === 'RESPONSIBLE_LEGAL' ||
+        c.metadata?.isLegalRepresentative === true ||
+        c.email?.trim().toLowerCase() === 'test.athanor2@gmail.com';
+
+      if (isLegal) {
+        permissionManager.setUserRoles(c.email, ['RESPONSIBLE_LEGAL', 'ADMINISTRATOR']);
+        if (c.metadata?.role !== 'RESPONSIBLE_LEGAL' || !c.metadata?.isLegalRepresentative) {
+          c.metadata = {
+            ...c.metadata,
+            role: 'RESPONSIBLE_LEGAL',
+            isLegalRepresentative: true
+          };
+          await db.rubrica.put(c);
+        }
+        console.log(`[PermissionManager] Allineati con successo i permessi di Responsabile Legale ed Amministratore per "${c.email}" (${c.firstName} ${c.lastName}).`);
+      }
+    }
+  } catch (e) {
+    console.warn('[Bootstrap] Errore nell\'allineamento permessi del Responsabile Legale:', e);
   }
 }
 
@@ -78,7 +133,12 @@ async function checkLegalRepresentativeExists(): Promise<boolean> {
   try {
     const contacts = await db.rubrica.filter((c) => !c.deleted).toArray();
     return contacts.some(
-      (c) => c.isInternal && (c.metadata?.role === 'Responsabile Legale' || c.metadata?.isLegalRepresentative === true)
+      (c) =>
+        c.isInternal &&
+        (c.metadata?.role === 'Responsabile Legale' ||
+          c.metadata?.role === 'RESPONSIBLE_LEGAL' ||
+          c.metadata?.isLegalRepresentative === true ||
+          c.metadata?.fullRecord?.organizationalProfile?.associatedRoles?.some((r: any) => r.role === 'RESPONSIBLE_LEGAL'))
     );
   } catch (e) {
     console.warn('[Bootstrap] Errore nella verifica del Responsabile Legale in Dexie:', e);
@@ -93,6 +153,7 @@ function showBlockingOnboardingModal(
   container: HTMLElement,
   isDemoMode: boolean,
   authAdapter: MockAuthAdapter,
+  contactsPlugin: ContactsPlugin,
   onCompleted: () => Promise<void>
 ): void {
   let isAdministratorAuthenticated = false;
@@ -247,25 +308,12 @@ function showBlockingOnboardingModal(
       return;
     }
 
-    const contactId = `contact-legale-${Date.now()}`;
-    await db.rubrica.put({
-      contactId,
-      firstName,
-      lastName,
-      email,
-      phone,
-      birthDate,
-      isInternal: true,
-      deleted: false,
-      metadata: {
-        role: 'Responsabile Legale',
-        isLegalRepresentative: true,
-        nominationFileName: pdfFile.name,
-        nominationUploadedAt: Date.now()
-      }
-    });
+    await contactsPlugin.initializeLegalRepresentative(
+      { name: firstName, surname: lastName, email, phone, birthDate },
+      pdfFile.name
+    );
 
-    console.log('[Bootstrap] Onboarding Responsabile Legale completato con successo.');
+    console.log('[Bootstrap] Onboarding Responsabile Legale completato con successo tramite ContactsPlugin.');
     await onCompleted();
   });
 }
@@ -273,18 +321,21 @@ function showBlockingOnboardingModal(
 /**
  * Inizializza la Shell visiva responsive con Sidebar a Sinistra
  */
-async function initializeMainShell(container: HTMLElement, docId: string, mapPlugin: MapPlugin): Promise<void> {
+async function initializeMainShell(
+  container: HTMLElement,
+  docId: string,
+  mapPlugin: MapPlugin,
+  contactsPlugin: ContactsPlugin,
+  permissionsPlugin: PermissionsPlugin
+): Promise<void> {
   const shell = new ShellLayout(container);
   shell.render();
+  console.log('[initializeMainShell] Plugins pronti:', { mapPlugin, contactsPlugin, permissionsPlugin });
 
   const editorMount = container.querySelector<HTMLElement>('#shell-editor-mount');
   if (editorMount) {
     const existingDoc = await db.documents.get(docId);
 
-    /**
-     * REQUISITO: Il plugin NON deve avviarsi di default nel canvas.
-     * Il documento di base contiene solo testo/intestazioni pulite.
-     */
     const initialContent = existingDoc?.body || {
       type: 'doc',
       content: [
@@ -298,7 +349,7 @@ async function initializeMainShell(container: HTMLElement, docId: string, mapPlu
           content: [
             {
               type: 'text',
-              text: 'Benvenuti nella shell operativa dell\'Ecosistema Digitale per il Terzo Settore. Per attivare il modulo cartografico, clicca sul pulsante "Mappe & Spostamenti" nella sezione "Utilità & Strumenti" situata nella barra laterale sinistra.'
+              text: 'Benvenuti nella shell operativa dell\'Ecosistema Digitale per il Terzo Settore. Per attivare un modulo (Rubrica Anagrafica, Permessi & Spazi, Mappe o Smart Task Manager), clicca sul relativo pulsante nella barra laterale sinistra.'
             }
           ]
         }
@@ -309,13 +360,93 @@ async function initializeMainShell(container: HTMLElement, docId: string, mapPlu
 
     /**
      * LISTENER LANCIO PLUGIN:
-     * Cliccando sul pulsante "Mappe & Spostamenti" nella sezione 2 della sidebar sinistra,
-     * viene inserito il blocco plugin 'map-tool' all'interno del canvas dell'editor.
+     * Inserisce i blocchi plugin nel canvas dell'editor su richiesta dell'utente
      */
     eventBus.on('plugin:launch', (payload: any) => {
       if (payload && payload.pluginId === 'map-tool') {
         console.log('[main.ts] Inserimento del modulo Mappe nel canvas dell\'editor...');
         editorCore.insertPluginBlock('map-tool', mapPlugin.createCleanInitialState(), false);
+      } else if (payload && payload.pluginId === 'task-tool') {
+        console.log('[main.ts] Inserimento del modulo Smart Task Manager nel canvas dell\'editor...');
+        editorCore.insertPluginBlock(
+          'task-tool',
+          {
+            pluginId: 'task-tool',
+            tasks: [
+              {
+                taskId: `tsk-init-${Date.now()}`,
+                parentId: null,
+                taskType: 'OPERATIVO',
+                category: 'GENERALE',
+                description: 'Verificare materiali e attrezzature prima dell\'uscita',
+                dueDate: null,
+                assigneeId: null,
+                completed: false,
+                completedAt: null,
+                completedBy: null,
+                openedBy: 'segretario@ente.org',
+                interaction: { actionType: 'NESSUNA' }
+              }
+            ]
+          },
+          true
+        );
+      } else if (payload && payload.pluginId === 'contacts-tool') {
+        console.log('[main.ts] Inserimento del modulo Rubrica Anagrafica (IdP) nel canvas dell\'editor...');
+        editorCore.insertPluginBlock(
+          'contacts-tool',
+          {
+            pluginId: 'contacts-tool',
+            activeTab: 'internal',
+            searchQuery: ''
+          },
+          true
+        );
+      } else if (payload && payload.pluginId === 'permissions-tool') {
+        console.log('[main.ts] Inserimento della Console Permessi & Spazi (RBAC) nel canvas dell\'editor...');
+        editorCore.insertPluginBlock(
+          'permissions-tool',
+          {
+            pluginId: 'permissions-tool',
+            activeSpaceId: 'space-default',
+            currentUserRoles: ['ADMINISTRATOR'],
+            currentUserId: 'admin'
+          },
+          true
+        );
+      }
+    });
+
+    /**
+     * LISTENER CAMBIO SPAZIO DI LAVORO (WORKSPACE SWITCHER):
+     * Aggiorna istantaneamente il contesto applicativo ed il canvas dell'editor al cambio dello Spazio selezionato.
+     */
+    eventBus.on('space:changed', (payload: any) => {
+      if (payload && payload.spaceId) {
+        console.log(`[main.ts] 🔄 RE-INDIRIZZAMENTO CONTESTO SPAZIO ATTIVO: "${payload.spaceId}" (${payload.spaceName})`);
+
+        // Re-inizializzazione del contenuto editor per lo spazio selezionato
+        const newSpaceHeading = {
+          type: 'doc',
+          content: [
+            {
+              type: 'heading',
+              attrs: { level: 2 },
+              content: [{ type: 'text', text: `Documento Operativo - ${payload.spaceName}` }]
+            },
+            {
+              type: 'paragraph',
+              content: [
+                {
+                  type: 'text',
+                  text: `Stai attualmente visualizzando ed operando nello Spazio di Lavoro "${payload.spaceName}" (ID: ${payload.spaceId}). Tutti i dati, verbali, task e contatti caricati sono ora filtrati e sincronizzati per questo specifico ambiente.`
+                }
+              ]
+            }
+          ]
+        };
+
+        editorCore.setContent(newSpaceHeading);
       }
     });
   }
