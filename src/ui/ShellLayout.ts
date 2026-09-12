@@ -12,6 +12,7 @@ import { eventBus, EventBus, SyncStatusType } from '../base/EventBus.js';
 import { i18nManager, I18nManager } from '../base/I18nManager.js';
 import { db } from '../base/Database.js';
 import { permissionManager } from '../modules/PermissionManager.js';
+import { MockAuthAdapter, UserSession } from '../modules/AuthAdapter.js';
 
 export type ThemeType = 'nord' | 'dracula';
 
@@ -26,6 +27,8 @@ export class ShellLayout {
   private container: HTMLElement;
   private bus: EventBus;
   private i18n: I18nManager;
+  private authAdapter: MockAuthAdapter;
+  private currentSession: UserSession | null = null;
   private currentSyncStatus: SyncStatusType = 'synced';
   private currentTheme: ThemeType = 'nord';
   private currentActiveSpaceId: string = 'space-default';
@@ -41,13 +44,28 @@ export class ShellLayout {
     this.container = container;
     this.bus = eventBus;
     this.i18n = i18nManager;
+    this.authAdapter = new MockAuthAdapter();
 
     this.setupSyncListener();
     this.loadSavedActiveSpace();
   }
 
+  public async setSession(session: UserSession | null): Promise<void> {
+    this.currentSession = session;
+    await this.populateWorkspaceSwitcher();
+    this.updateActiveSpaceUI(this.currentActiveSpaceId);
+    const userBadge = this.container.querySelector('#user-profile-info');
+    if (userBadge && session) {
+      userBadge.innerHTML = `
+        <span class="text-slate-200 font-bold">👤 ${session.firstName} ${session.lastName}</span>
+        <span class="text-[10px] bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded font-semibold border border-blue-800">${session.roles[0] || 'Utente'}</span>
+      `;
+    }
+  }
+
   private async loadSavedActiveSpace(): Promise<void> {
     try {
+      this.currentSession = await this.authAdapter.getSession();
       const saved = await db.settings.get('core.active_space_id');
       if (saved && saved.value) {
         this.currentActiveSpaceId = saved.value;
@@ -65,11 +83,14 @@ export class ShellLayout {
   }
 
   public render(): void {
+    const userDisplayName = this.currentSession ? `${this.currentSession.firstName} ${this.currentSession.lastName}` : 'Alessio Folli';
+    const userRoleBadge = this.currentSession?.roles[0] || 'Responsabile Legale';
+
     this.container.setAttribute('data-theme', this.currentTheme);
     this.container.innerHTML = `
       <div class="shell-layout-root flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-primary,#0f172a)] text-[var(--text-primary,#f8fafc)] font-sans">
         
-        <!-- HEADER GRAFICO CON SEMAFORO DI SINCRONIZZAZIONE -->
+        <!-- HEADER GRAFICO CON SEMAFORO DI SINCRONIZZAZIONE & USER SESSION PROFILE -->
         <header class="h-14 border-b border-[var(--border-color,#1e293b)] px-4 flex items-center justify-between bg-[var(--bg-secondary,#1e293b)] shrink-0">
           <div class="flex items-center gap-3">
             <div class="flex items-center gap-2">
@@ -79,8 +100,19 @@ export class ShellLayout {
             <span class="text-[10px] px-2 py-0.5 rounded border border-blue-800 bg-blue-950 text-blue-300 font-semibold">Local-First Shell</span>
           </div>
 
-          <!-- Semaforo Stato Replica & Controls -->
-          <div class="flex items-center gap-4 text-xs">
+          <!-- Active User Profile, Logout/Switch Account & Controls -->
+          <div class="flex items-center gap-3 text-xs">
+            
+            <div id="user-profile-info" class="flex items-center gap-2 bg-slate-900 px-3 py-1 rounded-lg border border-slate-700 shadow-sm">
+              <span class="text-slate-200 font-bold">👤 ${userDisplayName}</span>
+              <span class="text-[10px] bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded font-semibold border border-blue-800">${userRoleBadge}</span>
+            </div>
+
+            <button id="btn-logout-switch" title="Disconnetti la sessione corrente o accedi con un altro account" class="bg-red-950 hover:bg-red-900 active:bg-red-800 border border-red-800 text-red-300 text-xs px-2.5 py-1 rounded-lg font-bold transition-all shadow cursor-pointer flex items-center gap-1.5">
+              <span>🚪</span>
+              <span>Disconnetti / Cambia Utente</span>
+            </button>
+
             <div id="sync-status-indicator" class="flex items-center gap-2 bg-slate-900 px-3 py-1.5 rounded-full border border-slate-800">
               ${this.renderSyncIndicatorHTML()}
             </div>
@@ -247,8 +279,9 @@ export class ShellLayout {
     if (!switcherSelect) return;
 
     try {
-      const activeUserEmail = 'test.athanor2@gmail.com';
-      const isAuthorizedAdmin = permissionManager.canUserManagePermissions(activeUserEmail, ['RESPONSIBLE_LEGAL']);
+      const activeUserEmail = this.currentSession?.email || 'test.athanor2@gmail.com';
+      const userRoles = this.currentSession?.roles || ['RESPONSIBLE_LEGAL'];
+      const isAuthorizedAdmin = permissionManager.canUserManagePermissions(activeUserEmail, userRoles as any);
 
       let userWorkspaces: WorkspaceItem[] = [...this.defaultWorkspaces];
 
@@ -285,7 +318,9 @@ export class ShellLayout {
     if (activeBadge) activeBadge.textContent = spaceId;
     if (infoSpaceId) infoSpaceId.textContent = spaceId;
 
-    const canManage = permissionManager.canUserManagePermissions('test.athanor2@gmail.com', ['RESPONSIBLE_LEGAL']);
+    const activeUserEmail = this.currentSession?.email || 'test.athanor2@gmail.com';
+    const userRoles = this.currentSession?.roles || ['RESPONSIBLE_LEGAL'];
+    const canManage = permissionManager.canUserManagePermissions(activeUserEmail, userRoles as any);
     if (infoPermissions) {
       infoPermissions.textContent = canManage ? 'Read / Write (Amministratore)' : 'Read Only (Volontario)';
       infoPermissions.className = canManage ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold';
@@ -293,6 +328,12 @@ export class ShellLayout {
   }
 
   private bindEvents(): void {
+    this.container.querySelector('#btn-logout-switch')?.addEventListener('click', async () => {
+      console.log('[ShellLayout] 🚪 Disconnessione utente in corso...');
+      await this.authAdapter.logout();
+      this.currentSession = null;
+      this.bus.emit('auth:logout', {});
+    });
     this.container.querySelector('#theme-selector')?.addEventListener('change', (e) => {
       this.currentTheme = (e.target as HTMLSelectElement).value as ThemeType;
       this.container.setAttribute('data-theme', this.currentTheme);

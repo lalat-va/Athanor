@@ -40,6 +40,7 @@ export interface EventMap {
   'task:updated': TaskItemAttributes;
   'sync:status': SyncStatusType;
   'space:changed': { spaceId: string; spaceName: string };
+  'storage:mapping_updated': { spaceId: string; mapping: any };
   [key: string]: any;
 }
 

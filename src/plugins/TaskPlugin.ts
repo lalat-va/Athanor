@@ -72,9 +72,19 @@ export class TaskPlugin implements AppPlugin {
   public static QTY_REGEX = /\b(\d+)\s*(?:pz|pezzi|pali|tende|kg|g|litri|l|unità)?\b/i;
   public static COST_REGEX = /(\d+(?:\.\d{1,2})?)\s*(?:€|euro|EUR)\b/i;
 
+  private activeSpaceId: string = 'space-default';
+
   public async init(eventBus: EventBus, i18n: I18nManager): Promise<void> {
     this.eventBus = eventBus;
     this.i18n = i18n;
+
+    // Ascolta cambi di spazio per sincronizzare lo stato dei task
+    this.eventBus.on('space:changed', async (payload: any) => {
+      if (payload && payload.spaceId) {
+        this.activeSpaceId = payload.spaceId;
+        console.log(`[TaskPlugin] Sincronizzazione task per lo Spazio "${this.activeSpaceId}".`);
+      }
+    });
 
     // Registra lo schema esposto delle Keyword per l'AutomationEngine
     keywordManager.registerNamespaceKeywords('task', {
@@ -91,6 +101,31 @@ export class TaskPlugin implements AppPlugin {
     });
 
     console.log('[TaskPlugin] Inizializzato con successo ed integrate le keyword di sistema.');
+  }
+
+  public async saveTasksPersistently(spaceId: string, tasks: TaskItemAttributes[]): Promise<void> {
+    try {
+      await db.settings.put({
+        key: `tasks_${spaceId}`,
+        value: tasks,
+        lastUpdated: Date.now()
+      });
+      console.log(`[TaskPlugin] Salvati ${tasks.length} task persistentemente per lo Spazio "${spaceId}".`);
+    } catch (e) {
+      console.warn('[TaskPlugin] Errore salvataggio task in Dexie:', e);
+    }
+  }
+
+  public async loadTasksPersistently(spaceId: string): Promise<TaskItemAttributes[]> {
+    try {
+      const record = await db.settings.get(`tasks_${spaceId}`);
+      if (record && Array.isArray(record.value)) {
+        return record.value;
+      }
+    } catch (e) {
+      console.warn('[TaskPlugin] Errore caricamento task da Dexie:', e);
+    }
+    return [];
   }
 
   /**
@@ -268,6 +303,8 @@ export class TaskPlugin implements AppPlugin {
       dataState.tasks.push(newTask);
       descInput.value = '';
 
+      await this.saveTasksPersistently(this.activeSpaceId, dataState.tasks);
+
       if (this.eventBus) {
         this.eventBus.emit('task:created', newTask);
       }
@@ -295,6 +332,8 @@ export class TaskPlugin implements AppPlugin {
             task.openedBy = currentUser; // Riapertura tracciata
           }
 
+          await this.saveTasksPersistently(this.activeSpaceId, dataState.tasks);
+
           if (this.eventBus) {
             this.eventBus.emit(isChecked ? 'task:completed' : 'task:updated', task);
           }
@@ -306,9 +345,10 @@ export class TaskPlugin implements AppPlugin {
 
     // Eliminazione Task
     container.querySelectorAll('.delete-task-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
+      btn.addEventListener('click', async (e) => {
         const taskId = (e.currentTarget as HTMLElement).getAttribute('data-delete-id');
         dataState.tasks = dataState.tasks.filter((t) => t.taskId !== taskId && t.parentId !== taskId);
+        await this.saveTasksPersistently(this.activeSpaceId, dataState.tasks);
         this.render(container, dataState, '');
       });
     });
