@@ -17,6 +17,7 @@ import { MapPlugin } from './plugins/MapPlugin.js';
 import { TaskPlugin } from './plugins/TaskPlugin.js';
 import { ContactsPlugin } from './plugins/ContactsPlugin.js';
 import { PermissionsPlugin } from './plugins/PermissionsPlugin.js';
+import { AccountingPlugin } from './plugins/AccountingPlugin.js';
 import { automationEngine } from './modules/AutomationEngine.js';
 import { permissionManager } from './modules/PermissionManager.js';
 import { CollabService } from './base/CollabService.js';
@@ -34,15 +35,17 @@ async function bootstrapApp(): Promise<void> {
   const authAdapter = new MockAuthAdapter();
   await i18nManager.init(db, eventBus);
 
-  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP) e Permessi & Spazi (RBAC)
+  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC) e Rendicontazione (Contabilità)
   const mapPlugin = new MapPlugin();
   const taskPlugin = new TaskPlugin();
   const contactsPlugin = new ContactsPlugin();
   const permissionsPlugin = new PermissionsPlugin();
+  const accountingPlugin = new AccountingPlugin();
   await pluginManager.registerPlugin(mapPlugin);
   await pluginManager.registerPlugin(taskPlugin);
   await pluginManager.registerPlugin(contactsPlugin);
   await pluginManager.registerPlugin(permissionsPlugin);
+  await pluginManager.registerPlugin(accountingPlugin);
 
   // 3. Avvio del monitor di sicurezza attivo ActiveKillSwitch (Remote Wipe Polling)
   const activeKillSwitch = ActiveKillSwitch.getInstance(storageAdapter);
@@ -429,6 +432,18 @@ async function initializeMainShell(
             activeSpaceId: 'space-default',
             currentUserRoles: userRoles as any,
             currentUserId: userEmail
+          },
+          true
+        );
+      } else if (payload && payload.pluginId === 'accounting-tool') {
+        console.log('[main.ts] Inserimento del modulo Rendicontazione & Contabilità nel canvas dell\'editor...');
+        editorCore.insertPluginBlock(
+          'accounting-tool',
+          {
+            pluginId: 'accounting-tool',
+            activeTab: 'transactions',
+            activeFiscalYear: new Date().getFullYear(),
+            searchQuery: ''
           },
           true
         );

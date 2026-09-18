@@ -56,20 +56,45 @@ export interface RubricaContactRecord {
   metadata?: Record<string, any>;
 }
 
+export interface AccountingTransactionRecord {
+  transactionId: string;
+  spaceId: string;
+  fiscalYear: string;
+  date: string;
+  type: 'PREVENTIVE_INCOME' | 'PREVENTIVE_EXPENSE' | 'INCOME' | 'EXPENSE';
+  description: string;
+  localCategory: string;
+  ministerialCategoryCode: string;
+  ministerialCategoryLabel: string;
+  categoryListVersionDate: string;
+  costCenterIdSnapshot?: string | null;
+  amount: number;
+  paymentMethod: 'CASH' | 'BANK_TRANSFER' | 'DEBIT_CARD' | string;
+  attachment?: {
+    fileId?: string;
+    driveUrl?: string;
+    status?: 'PENDING' | 'UPLOADED' | 'NONE';
+  };
+  linkedPluginId?: string | null;
+  status: 'DRAFT' | 'CONFIRMED' | 'PUBLISHED';
+}
+
 export class LocalDatabase extends Dexie {
   public documents!: Table<DocumentRecord, string>;
   public settings!: Table<SettingRecord, string>;
   public telemetry_logs!: Table<TelemetryLogRecord, string>;
   public rubrica!: Table<RubricaContactRecord, string>;
+  public accounting!: Table<AccountingTransactionRecord, string>;
 
   constructor() {
     super('AthanorLocalDB');
 
-    this.version(1).stores({
+    this.version(2).stores({
       documents: '&id, title, lastModified, status, sectorId',
       settings: '&key, value, lastUpdated',
       telemetry_logs: '&logId, userId, documentId, spaceId, sessionStart, sessionEnd',
-      rubrica: '&contactId, firstName, lastName, email, phone, birthDate, isInternal, deleted'
+      rubrica: '&contactId, firstName, lastName, email, phone, birthDate, isInternal, deleted',
+      accounting: '&transactionId, spaceId, fiscalYear, date, type, linkedPluginId, costCenterIdSnapshot, status'
     });
 
     this.on('ready', async () => {

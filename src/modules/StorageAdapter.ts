@@ -28,6 +28,7 @@ export interface SpaceStorageConfig {
   clientId?: string;
   useRealDrive?: boolean;
   mappings: DriveFolderMapping[];
+  pluginFolderMappings?: Record<string, string>;
   lastSyncedTimestamp: number;
 }
 
@@ -41,6 +42,24 @@ export interface DriveConnectionTestResult {
   modifiedTime?: string;
   error?: string;
 }
+
+export const FOLDER_TREE_TEMPLATES: Record<string, { id: string; name: string; folders: string[] }> = {
+  template_produttivita: {
+    id: 'template_produttivita',
+    name: 'Modello "Produttività / Spazio"',
+    folders: ['Verbali', 'Attività', 'Rendicontazione', 'Progetti', 'Eventi', 'Materiali', 'Modulistica']
+  },
+  template_scout: {
+    id: 'template_scout',
+    name: 'Modello "Branca / Unità Scout"',
+    folders: ['Verbali Co.Ca.', 'Schede Attività', 'Cassa & Rendiconto', 'Programmazione', 'Materiali & Logistica', 'Modulistica & Consensi']
+  },
+  template_custom: {
+    id: 'template_custom',
+    name: 'Composizione Manuale Personalizzata',
+    folders: []
+  }
+};
 
 /**
  * Estrattore utility di ID Cartella Google Drive da URL completo o ID grezzo.
@@ -78,6 +97,14 @@ export abstract class StorageAdapter {
   ): Promise<DriveFolderMapping>;
   abstract unbindFolderMappingLocally(spaceId: string, mappingId: string): Promise<void>;
   abstract testGoogleDriveConnection(accessToken?: string, rootFolderId?: string): Promise<DriveConnectionTestResult>;
+  abstract getTargetFolderForPlugin(spaceId: string, pluginId: string): Promise<string | null>;
+  abstract setPluginFolderMapping(spaceId: string, pluginId: string, driveFolderId: string): Promise<void>;
+  abstract createFolderTreeFromTemplate(
+    spaceId: string,
+    templateId: string,
+    customFolders?: string[]
+  ): Promise<DriveFolderMapping[]>;
+  abstract getAllStorageConfigs(): Promise<Map<string, SpaceStorageConfig>>;
 }
 
 /**
@@ -90,20 +117,13 @@ export class MockStorageAdapter extends StorageAdapter {
 
   constructor() {
     super();
+    // Inizializzato VUOTO senza cartelle di esempio
     this.spaceConfigs.set('space-default', {
-      rootFolderId: '1a2b3c4d5e_demo_root',
-      rootFolderName: '/Associazione_Bologna_14_Master',
+      rootFolderId: '',
+      rootFolderName: '',
       lastSyncedTimestamp: Date.now(),
       useRealDrive: false,
-      mappings: [
-        { mappingId: 'map_01', spaceId: 'space-default', folderName: 'Verbali', driveFolderId: '1a2b_verbali_01', webViewLink: 'https://drive.google.com/drive/folders/1a2b_verbali_01' },
-        { mappingId: 'map_02', spaceId: 'space-default', folderName: 'Progetti', driveFolderId: '1a2b_progetti_02', webViewLink: 'https://drive.google.com/drive/folders/1a2b_progetti_02' },
-        { mappingId: 'map_03', spaceId: 'space-default', folderName: 'Eventi', driveFolderId: '1a2b_eventi_03', webViewLink: 'https://drive.google.com/drive/folders/1a2b_eventi_03' },
-        { mappingId: 'map_04', spaceId: 'space-default', folderName: 'Attività', driveFolderId: '1a2b_attivita_04', webViewLink: 'https://drive.google.com/drive/folders/1a2b_attivita_04' },
-        { mappingId: 'map_05', spaceId: 'space-default', folderName: 'Materiali & Magazzino', driveFolderId: '1a2b_magazzino_05', webViewLink: 'https://drive.google.com/drive/folders/1a2b_magazzino_05' },
-        { mappingId: 'map_06', spaceId: 'space-default', folderName: 'Rendicontazione & Cassa', driveFolderId: '1a2b_cassa_06', webViewLink: 'https://drive.google.com/drive/folders/1a2b_cassa_06' },
-        { mappingId: 'map_07', spaceId: 'space-default', folderName: 'Modulistica & Privacy', driveFolderId: '1a2b_privacy_07', webViewLink: 'https://drive.google.com/drive/folders/1a2b_privacy_07' }
-      ]
+      mappings: []
     });
   }
 
@@ -316,6 +336,98 @@ export class MockStorageAdapter extends StorageAdapter {
       eventBus.emit('storage:mapping_updated', { spaceId, mapping: null });
       console.log(`[StorageAdapter] 🛡️ Svincolato il mapping locale "${mappingId}" per lo Spazio "${spaceId}". (Nessuna cancellazione remota).`);
     }
+  }
+
+  public async getTargetFolderForPlugin(spaceId: string, pluginId: string): Promise<string | null> {
+    const config = await this.getStorageConfig(spaceId);
+    if (!config) return null;
+
+    if (config.pluginFolderMappings && config.pluginFolderMappings[pluginId]) {
+      return config.pluginFolderMappings[pluginId];
+    }
+
+    const lowerPlugin = pluginId.toLowerCase();
+    let keyword = '';
+    if (lowerPlugin.includes('minute') || lowerPlugin.includes('verb')) keyword = 'verb';
+    else if (lowerPlugin.includes('account') || lowerPlugin.includes('rend') || lowerPlugin.includes('contab')) keyword = 'rend';
+    else if (lowerPlugin.includes('event')) keyword = 'event';
+    else if (lowerPlugin.includes('task')) keyword = 'attiv';
+
+    if (keyword) {
+      const match = config.mappings.find((m) => m.folderName.toLowerCase().includes(keyword));
+      if (match) return match.driveFolderId;
+    }
+
+    return config.rootFolderId || null;
+  }
+
+  public async setPluginFolderMapping(spaceId: string, pluginId: string, driveFolderId: string): Promise<void> {
+    const config = (await this.getStorageConfig(spaceId)) || {
+      rootFolderId: driveFolderId,
+      rootFolderName: `/Spazio_${spaceId}`,
+      mappings: [],
+      lastSyncedTimestamp: Date.now()
+    };
+    if (!config.pluginFolderMappings) {
+      config.pluginFolderMappings = {};
+    }
+    config.pluginFolderMappings[pluginId] = driveFolderId;
+    config.lastSyncedTimestamp = Date.now();
+    await this.saveStorageConfig(spaceId, config);
+    eventBus.emit('storage:mapping_updated', { spaceId, mapping: { pluginId, driveFolderId } });
+  }
+
+  public async createFolderTreeFromTemplate(
+    spaceId: string,
+    templateId: string,
+    customFolders?: string[]
+  ): Promise<DriveFolderMapping[]> {
+    const template = FOLDER_TREE_TEMPLATES[templateId];
+    const folderList = customFolders && customFolders.length > 0
+      ? customFolders
+      : (template ? template.folders : []);
+
+    const createdMappings: DriveFolderMapping[] = [];
+
+    for (const folderName of folderList) {
+      if (!folderName.trim()) continue;
+      const mapping = await this.createRemoteFolderImmediately(spaceId, folderName.trim());
+      createdMappings.push(mapping);
+
+      const fNameLower = folderName.toLowerCase();
+      if (fNameLower.includes('verbal')) {
+        await this.setPluginFolderMapping(spaceId, 'MinutesPlugin', mapping.driveFolderId);
+      } else if (fNameLower.includes('rendicont') || fNameLower.includes('cassa')) {
+        await this.setPluginFolderMapping(spaceId, 'AccountingPlugin', mapping.driveFolderId);
+      } else if (fNameLower.includes('event')) {
+        await this.setPluginFolderMapping(spaceId, 'EventPlugin', mapping.driveFolderId);
+      } else if (fNameLower.includes('attivit') || fNameLower.includes('task')) {
+        await this.setPluginFolderMapping(spaceId, 'TaskPlugin', mapping.driveFolderId);
+      }
+    }
+
+    console.log(`[StorageAdapter] 🌳 Albero cartelle da template "${templateId}" creato per lo Spazio "${spaceId}" (${createdMappings.length} cartelle).`);
+    return createdMappings;
+  }
+
+  public async getAllStorageConfigs(): Promise<Map<string, SpaceStorageConfig>> {
+    const result = new Map<string, SpaceStorageConfig>();
+    const knownSpaceIds = ['space-default', 'amministrazione', 'space_coca', 'space_reparto', 'space_magazzino'];
+    
+    for (const sId of knownSpaceIds) {
+      const cfg = await this.getStorageConfig(sId);
+      if (cfg && (cfg.mappings.length > 0 || (cfg.rootFolderId && cfg.rootFolderId !== '1a2b3c4d5e_demo_root'))) {
+        result.set(sId, cfg);
+      }
+    }
+
+    for (const [sId, cfg] of this.spaceConfigs.entries()) {
+      if (!result.has(sId) && cfg.mappings.length > 0) {
+        result.set(sId, cfg);
+      }
+    }
+
+    return result;
   }
 }
 

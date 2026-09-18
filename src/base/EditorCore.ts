@@ -87,10 +87,30 @@ export const PluginBlockNode = Node.create({
       container.className = 'plugin-block-container my-3 rounded-md border border-slate-700 bg-slate-900 p-3 shadow-sm';
       container.setAttribute('data-plugin-id', node.attrs.pluginId);
 
-      // Blocco della propagazione degli eventi da tastiera ed input verso ProseMirror
-      ['keydown', 'keyup', 'keypress', 'input', 'change'].forEach((eventType) => {
+      // Blocco della propagazione degli eventi da tastiera, mouse, touch ed input verso ProseMirror
+      [
+        'keydown', 'keyup', 'keypress',
+        'input', 'change',
+        'mousedown', 'mouseup', 'mousemove',
+        'click', 'dblclick', 'selectstart',
+        'pointerdown', 'pointermove', 'pointerup',
+        'touchstart', 'touchmove', 'touchend'
+      ].forEach((eventType) => {
         container.addEventListener(eventType, (e) => {
-          e.stopPropagation();
+          const target = e.target as HTMLElement | null;
+          if (
+            target &&
+            (target.tagName === 'INPUT' ||
+              target.tagName === 'TEXTAREA' ||
+              target.tagName === 'SELECT' ||
+              target.isContentEditable)
+          ) {
+            e.stopPropagation();
+          } else if (
+            ['keydown', 'keyup', 'keypress', 'input', 'change'].includes(eventType)
+          ) {
+            e.stopPropagation();
+          }
         });
       });
 

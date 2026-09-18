@@ -168,7 +168,7 @@ export class ShellLayout {
                     👥 Rubrica Anagrafica (IdP)
                   </button>
                   <button id="nav-settings-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer">
-                    ⚙️ Impostazioni Permessi & Spazi
+                    ⚙️ Impostazioni
                   </button>
                 </nav>
               </div>
@@ -199,8 +199,8 @@ export class ShellLayout {
               
               <div class="space-y-2">
                 <button id="btn-launch-permissions-plugin" class="w-full bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
-                  <span class="text-base group-hover:scale-110 transition-transform">🔐</span>
-                  <span>Permessi & Spazi (RBAC)</span>
+                  <span class="text-base group-hover:scale-110 transition-transform">⚙️</span>
+                  <span>Impostazioni Ente</span>
                 </button>
 
                 <button id="btn-launch-contacts-plugin" class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
@@ -216,6 +216,11 @@ export class ShellLayout {
                 <button id="btn-launch-task-plugin" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
                   <span class="text-base group-hover:scale-110 transition-transform">✅</span>
                   <span>Smart Task Manager</span>
+                </button>
+
+                <button id="btn-launch-accounting-plugin" class="w-full bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">💰</span>
+                  <span>Rendicontazione & Contabilità</span>
                 </button>
               </div>
 
@@ -408,6 +413,12 @@ export class ShellLayout {
     this.container.querySelector('#btn-launch-task-plugin')?.addEventListener('click', () => {
       console.log('[ShellLayout] Richiesta attivazione Task Manager...');
       this.bus.emit('plugin:launch', { pluginId: 'task-tool' });
+    });
+
+    // Event listener per Rendicontazione & Contabilità
+    this.container.querySelector('#btn-launch-accounting-plugin')?.addEventListener('click', () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Rendicontazione & Contabilità...');
+      this.bus.emit('plugin:launch', { pluginId: 'accounting-tool' });
     });
   }
 

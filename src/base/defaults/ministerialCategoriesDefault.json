@@ -1,0 +1,86 @@
+[
+  {
+    "code": "RUNTS_A4_1",
+    "label": "Generi Alimentari e Ristorazione (Cambusa & Vitto)",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_2",
+    "label": "Affitto e Noleggio Immobili, Terreni e Sedi",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_3",
+    "label": "Trasporti, Trasferte e Carburante (Treni, Bus, Mezzi)",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_4",
+    "label": "Utenze, Luce, Gas, Acqua e Connettività",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_5",
+    "label": "Attrezzature, Materiale Tecnico e Pionieristica",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_6",
+    "label": "Quote Associative, Assicurazioni e Tesseramenti",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_7",
+    "label": "Cancelleria, Stampa, Certificati e Modulistica",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_8",
+    "label": "Spese Mediche, Primo Soccorso e Sanitarie",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_A4_9",
+    "label": "Altre Uscite di Gestione Attività",
+    "section": "USCITE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_B1_1",
+    "label": "Quote Associative e Tesseramenti Ricevuti",
+    "section": "ENTRATE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_B1_2",
+    "label": "Contributi da Enti Pubblici / Convenzioni",
+    "section": "ENTRATE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_B1_3",
+    "label": "Erogazioni Liberali e Donazioni",
+    "section": "ENTRATE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_B1_4",
+    "label": "Quote Partecipazione Attività e Campi",
+    "section": "ENTRATE",
+    "validFrom": "2024-01-01"
+  },
+  {
+    "code": "RUNTS_B1_5",
+    "label": "Raccolta Fondi ed Eventi Autofinanziamento",
+    "section": "ENTRATE",
+    "validFrom": "2024-01-01"
+  }
+]
