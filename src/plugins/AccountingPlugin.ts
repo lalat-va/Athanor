@@ -547,6 +547,11 @@ export class AccountingPlugin implements AppPlugin {
     if (!mount) return;
 
     try {
+      const ccSetting = await db.settings.get('accounting.costCentersEnabled');
+      if (ccSetting !== undefined && ccSetting !== null) {
+        dataState.costCentersEnabled = !!ccSetting.value;
+      }
+
       let txs = await db.accounting.toArray();
 
       if (dataState.activeSpaceId && dataState.activeSpaceId !== 'ALL') {
@@ -1001,6 +1006,11 @@ export class AccountingPlugin implements AppPlugin {
     const modalRoot = container.querySelector('#acc-modal-root');
     if (!modalRoot) return;
 
+    const ccSetting = await db.settings.get('accounting.costCentersEnabled');
+    if (ccSetting !== undefined && ccSetting !== null) {
+      dataState.costCentersEnabled = !!ccSetting.value;
+    }
+
     const mappings: LocalCategoryMapping[] = (await db.settings.get('accounting.local_category_mappings'))?.value || this.defaultLocalMappings;
     const ccs = dataState.costCentersEnabled ? await costCenterRegistry.getCostCentersForSpace(dataState.activeSpaceId) : [];
 
@@ -1054,11 +1064,16 @@ export class AccountingPlugin implements AppPlugin {
             ${
               dataState.costCentersEnabled
                 ? `
-              <div>
+              <div class="space-y-1.5">
                 <label class="block text-slate-300 font-semibold mb-1">Centro di Costo *</label>
                 <select id="tx-cost-center" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100 font-mono">
-                  ${ccs.map((c) => `<option value="${c.value}">${c.budgetCode || c.value} - ${c.label}</option>`).join('')}
+                  ${
+                    ccs.length > 0
+                      ? ccs.map((c) => `<option value="${c.value}">${c.budgetCode || c.value} - ${c.label}</option>`).join('')
+                      : `<option value="">Nessun Centro di Costo disponibile per questo spazio</option>`
+                  }
                 </select>
+                <div id="cc-budget-summary-box" class="bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-[11px] font-mono space-y-1 shadow-inner"></div>
               </div>
             `
                 : ''
@@ -1097,6 +1112,65 @@ export class AccountingPlugin implements AppPlugin {
     const closeModal = () => {
       modalRoot.innerHTML = '';
     };
+
+    const updateBudgetSummary = async () => {
+      const summaryBox = modalRoot.querySelector('#cc-budget-summary-box');
+      if (!summaryBox || !dataState.costCentersEnabled) return;
+
+      const ccSelect = modalRoot.querySelector<HTMLSelectElement>('#tx-cost-center');
+      const ccVal = ccSelect?.value;
+      if (!ccVal) {
+        summaryBox.innerHTML = `<span class="text-slate-500 italic">Nessun Centro di Costo selezionato.</span>`;
+        return;
+      }
+
+      const selectedCc = ccs.find((c) => c.value === ccVal);
+      const allocatedBudget = selectedCc?.allocatedBudget || 0;
+
+      const allTxs = await db.accounting.toArray();
+      const ccTxs = allTxs.filter((t) => t.costCenterIdSnapshot === ccVal);
+
+      let prevExpenses = 0;
+      let prevIncomes = 0;
+      ccTxs.forEach((t) => {
+        if (t.type === 'EXPENSE') prevExpenses += t.amount;
+        if (t.type === 'INCOME') prevIncomes += t.amount;
+      });
+      const prevSpentNet = prevExpenses - prevIncomes;
+      const currentAvailable = allocatedBudget - prevSpentNet;
+
+      const typeSelect = modalRoot.querySelector<HTMLSelectElement>('#tx-type');
+      const amountInput = modalRoot.querySelector<HTMLInputElement>('#tx-amount');
+      const inputAmount = parseFloat(amountInput?.value || '0') || 0;
+      const isExpense = typeSelect?.value !== 'INCOME';
+
+      const projectedChange = isExpense ? -inputAmount : inputAmount;
+      const projectedAvailable = currentAvailable + projectedChange;
+
+      summaryBox.innerHTML = `
+        <div class="flex items-center justify-between text-slate-300">
+          <span>📊 Budget Iniziale Allocato:</span>
+          <span class="font-bold text-slate-100">€ ${allocatedBudget.toFixed(2)}</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400">
+          <span>💸 Spese già Registrate:</span>
+          <span class="text-red-400 font-semibold">- € ${prevSpentNet.toFixed(2)}</span>
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-800 pt-1">
+          <span class="font-bold text-slate-200">💰 Budget Residuo Proiettato:</span>
+          <span class="font-extrabold ${projectedAvailable >= 0 ? 'text-emerald-400' : 'text-red-400'}">
+            € ${projectedAvailable.toFixed(2)} ${projectedAvailable < 0 ? '⚠️ (Sforamento)' : ''}
+          </span>
+        </div>
+      `;
+    };
+
+    if (dataState.costCentersEnabled) {
+      updateBudgetSummary();
+      modalRoot.querySelector('#tx-cost-center')?.addEventListener('change', updateBudgetSummary);
+      modalRoot.querySelector('#tx-type')?.addEventListener('change', updateBudgetSummary);
+      modalRoot.querySelector('#tx-amount')?.addEventListener('input', updateBudgetSummary);
+    }
 
     modalRoot.querySelector('#acc-close-modal-btn')?.addEventListener('click', closeModal);
     modalRoot.querySelector('#acc-cancel-modal-btn')?.addEventListener('click', closeModal);

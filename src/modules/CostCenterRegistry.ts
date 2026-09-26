@@ -14,6 +14,7 @@ import { CategoryOption, CategoryProviderDefinition, categoryProviderRegistry } 
 export interface CostCenterDefinition extends CategoryOption {
   budgetCode?: string;
   spaceId?: string;
+  spaceIds?: string[];
   allocatedBudget?: number;
 }
 
@@ -41,6 +42,7 @@ export class CostCenterRegistry implements CategoryProviderDefinition {
       renewalPolicy: 'AUTO_RENEWAL',
       budgetCode: 'CC-EG-01',
       spaceId: 'space_reparto',
+      spaceIds: ['space_reparto'],
       allocatedBudget: 3500
     },
     {
@@ -51,6 +53,7 @@ export class CostCenterRegistry implements CategoryProviderDefinition {
       renewalPolicy: 'AUTO_RENEWAL',
       budgetCode: 'CC-DIR-02',
       spaceId: 'space_coca',
+      spaceIds: ['space_coca'],
       allocatedBudget: 12000
     },
     {
@@ -61,6 +64,7 @@ export class CostCenterRegistry implements CategoryProviderDefinition {
       renewalPolicy: 'AUTO_RENEWAL',
       budgetCode: 'CC-MAG-03',
       spaceId: 'space_magazzino',
+      spaceIds: ['space_magazzino'],
       allocatedBudget: 4500
     }
   ];
@@ -112,22 +116,33 @@ export class CostCenterRegistry implements CategoryProviderDefinition {
 
   public async getCostCentersForSpace(spaceId: string, asOf?: Date | null): Promise<CostCenterDefinition[]> {
     const all = await this.resolveOptions(asOf);
-    return all.filter((cc) => !cc.spaceId || cc.spaceId === spaceId || spaceId === 'space-default');
+    return all.filter((cc) => {
+      if (spaceId === 'ALL') return true;
+      if (cc.spaceIds && Array.isArray(cc.spaceIds) && cc.spaceIds.length > 0) {
+        return cc.spaceIds.includes(spaceId) || cc.spaceIds.includes('space-default') || spaceId === 'space-default';
+      }
+      return !cc.spaceId || cc.spaceId === spaceId || spaceId === 'space-default';
+    });
   }
 
   public async resolveCostCenterAt(spaceId: string, dateIso: string): Promise<string | null> {
     const targetDate = dateIso ? dateIso.split('T')[0] : new Date().toISOString().split('T')[0];
     const options = await this.resolveOptions(null);
-    const match = options.find(
-      (cc) =>
-        (cc.spaceId === spaceId || spaceId === 'space-default') &&
-        (!cc.validFrom || cc.validFrom <= targetDate) &&
-        (!cc.validTo || targetDate < cc.validTo)
-    );
+    const match = options.find((cc) => {
+      const matchesSpace =
+        spaceId === 'ALL' ||
+        (cc.spaceIds && Array.isArray(cc.spaceIds) && cc.spaceIds.length > 0
+          ? cc.spaceIds.includes(spaceId) || cc.spaceIds.includes('space-default') || spaceId === 'space-default'
+          : !cc.spaceId || cc.spaceId === spaceId || spaceId === 'space-default');
+      const isAfterStart = !cc.validFrom || cc.validFrom <= targetDate;
+      const isBeforeEnd = !cc.validTo || targetDate < cc.validTo;
+      return matchesSpace && isAfterStart && isBeforeEnd;
+    });
     return match ? match.value : null;
   }
 
   public async addCostCenter(cc: CostCenterDefinition): Promise<void> {
+    await this.initFromStorage();
     const idx = this.costCenters.findIndex((c) => c.value === cc.value);
     if (idx >= 0) {
       this.costCenters[idx] = cc;
@@ -143,6 +158,20 @@ export class CostCenterRegistry implements CategoryProviderDefinition {
       });
     } catch (e) {
       console.warn('[CostCenterRegistry] Errore salvataggio Centri di Costo in Dexie:', e);
+    }
+  }
+
+  public async deleteCostCenter(value: string): Promise<void> {
+    await this.initFromStorage();
+    this.costCenters = this.costCenters.filter((c) => c.value !== value);
+    try {
+      await db.settings.put({
+        key: 'accounting.cost_centers',
+        value: this.costCenters,
+        lastUpdated: Date.now()
+      });
+    } catch (e) {
+      console.warn('[CostCenterRegistry] Errore eliminazione Centro di Costo in Dexie:', e);
     }
   }
 }

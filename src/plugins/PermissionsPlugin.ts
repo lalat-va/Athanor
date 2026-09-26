@@ -26,7 +26,8 @@ export type SettingsTabType =
   | 'rbac-permissions'
   | 'spaces-governance'
   | 'accounting-settings'
-  | 'local-preferences';
+  | 'local-preferences'
+  | 'warehouse-positions';
 
 export interface PermissionsPluginState {
   pluginId: string;
@@ -210,6 +211,15 @@ export class PermissionsPlugin implements AppPlugin {
             }" data-tab="local-preferences">
               <span class="text-base">⚙️</span>
               <span>Preferenze Locali</span>
+            </button>
+
+            <button class="settings-sidebar-btn w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+              dataState.activeSettingsTab === 'warehouse-positions'
+                ? 'bg-indigo-950 text-indigo-200 border border-indigo-800 shadow'
+                : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+            }" data-tab="warehouse-positions">
+              <span class="text-base">📦</span>
+              <span>Posizioni Magazzino</span>
             </button>
           </aside>
 
@@ -534,7 +544,7 @@ export class PermissionsPlugin implements AppPlugin {
               </div>
 
               <!-- CENTRI DI COSTO (OPZIONALE) -->
-              <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-4">
+              <div id="acc-cc-management-block" class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-4">
                 <div class="border-b border-slate-800 pb-2 flex items-center justify-between">
                   <h4 class="font-bold text-slate-200 text-xs flex items-center gap-2">
                     <span>📊 Gestione Registri Centri di Costo (Opzionale)</span>
@@ -544,8 +554,15 @@ export class PermissionsPlugin implements AppPlugin {
                   </span>
                 </div>
 
-                <div class="bg-slate-900 p-3.5 rounded-lg border border-slate-800 space-y-3">
-                  <div class="font-bold text-slate-200 text-xs">➕ Registra Nuovo Centro di Costo:</div>
+                <div id="cc-form-container" class="bg-slate-900 p-3.5 rounded-lg border border-slate-800 space-y-3">
+                  <input type="hidden" id="cc-editing-value" value="" />
+                  <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div id="cc-form-title" class="font-bold text-slate-200 text-xs">➕ Registra Nuovo Centro di Costo:</div>
+                    <button type="button" id="cancel-edit-cc-btn" class="hidden text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded font-semibold cursor-pointer">
+                      ✕ Annulla Modifica
+                    </button>
+                  </div>
+
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label class="block text-slate-400 mb-1">Nome / Etichetta Centro di Costo *</label>
@@ -559,15 +576,40 @@ export class PermissionsPlugin implements AppPlugin {
                       <label class="block text-slate-400 mb-1">Budget Allocato (€)</label>
                       <input type="number" id="cc-budget-input" placeholder="3500" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100 font-mono" />
                     </div>
-                    <div>
-                      <label class="block text-slate-400 mb-1">Spazio di Competenza</label>
-                      <select id="cc-space-select" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100">
-                        <option value="space_reparto">⛺ Reparto Orione</option>
-                        <option value="space_coca">🏛️ Co.Ca. / Direzione</option>
-                        <option value="space_magazzino">🛠️ Magazzino & Logistica</option>
-                        <option value="space-default">📦 Spazio Operativo Generale</option>
-                      </select>
+                  </div>
+
+                  <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <label class="block text-slate-300 font-bold text-[11px]">Spazi di Competenza (seleziona almeno 1) *</label>
+                      <button type="button" id="cc-select-all-spaces-btn" class="text-[10px] text-blue-400 hover:text-blue-300 font-semibold underline cursor-pointer">
+                        Seleziona Tutti / Deseleziona Tutti
+                      </button>
                     </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs" id="cc-spaces-container">
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="cc-space-cb cursor-pointer" value="space_reparto" checked />
+                        <span>⛺ Reparto Orione</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="cc-space-cb cursor-pointer" value="space_coca" />
+                        <span>🏛️ Co.Ca. / Direzione</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="cc-space-cb cursor-pointer" value="space_magazzino" />
+                        <span>🛠️ Magazzino & Logistica</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="cc-space-cb cursor-pointer" value="space-default" />
+                        <span>📦 Spazio Generale</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="cc-space-cb cursor-pointer" value="amministrazione" />
+                        <span>🏛️ Governance</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label class="block text-slate-400 mb-1">Inizio Validità</label>
                       <input type="date" id="cc-valid-from" value="2025-10-01" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
@@ -577,8 +619,9 @@ export class PermissionsPlugin implements AppPlugin {
                       <input type="date" id="cc-valid-to" value="2026-09-30" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
                     </div>
                   </div>
-                  <div class="flex justify-end pt-1">
-                    <button type="button" id="add-cost-center-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded shadow transition-all">
+
+                  <div class="flex justify-end pt-1 gap-2">
+                    <button type="button" id="add-cost-center-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded shadow transition-all cursor-pointer">
                       📊 Registra Centro di Costo
                     </button>
                   </div>
@@ -683,6 +726,92 @@ export class PermissionsPlugin implements AppPlugin {
               </div>
             </div>
 
+            <!-- TAB 6: POSIZIONI MAGAZZINO -->
+            <div class="tab-content ${dataState.activeSettingsTab === 'warehouse-positions' ? '' : 'hidden'} space-y-5">
+              <div class="bg-slate-950 border border-slate-800 p-4 rounded-xl space-y-4">
+                <div class="border-b border-slate-800 pb-2 flex items-center justify-between">
+                  <h4 class="font-bold text-slate-200 text-xs flex items-center gap-2">
+                    <span>📦 Posizioni & Luoghi di Conservazione Magazzino</span>
+                  </h4>
+                  <span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded font-bold">
+                    WarehousePositionRegistry
+                  </span>
+                </div>
+
+                <p class="text-[11px] text-slate-400">
+                  Registra le posizioni e le ubicazioni fisiche in cui l'organizzazione conserva materiale, attrezzatura e dispositivi.
+                </p>
+
+                <!-- FORM NUOVA / MODIFICA POSIZIONE -->
+                <div id="wh-pos-form-container" class="bg-slate-900 p-3.5 rounded-lg border border-slate-800 space-y-3">
+                  <input type="hidden" id="wh-pos-editing-id" value="" />
+                  <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                    <div id="wh-pos-form-title" class="font-bold text-slate-200 text-xs">➕ Registra Nuova Posizione:</div>
+                    <button type="button" id="wh-pos-cancel-btn" class="hidden text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2.5 py-1 rounded font-semibold cursor-pointer">
+                      ✕ Annulla Modifica
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label class="block text-slate-400 mb-1">Nome Posizione *</label>
+                      <input type="text" id="wh-pos-name-input" placeholder="es. Magazzino Sede Principale" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
+                    </div>
+                    <div>
+                      <label class="block text-slate-400 mb-1">Ubicazione / Location</label>
+                      <input type="text" id="wh-pos-loc-input" placeholder="es. Via Scout 12 - Piano Terra Stanza B" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
+                    </div>
+                    <div>
+                      <label class="block text-slate-400 mb-1">Responsabile referente</label>
+                      <input type="text" id="wh-pos-resp-input" placeholder="es. Mario Rossi" class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label class="block text-slate-400 mb-1">Note & Attenzioni (Istruzioni di accesso / sicurezza)</label>
+                    <input type="text" id="wh-pos-notes-input" placeholder="es. Chiavi in rastrelliera direttivo. Attenzione all'umidità..." class="w-full bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-slate-100" />
+                  </div>
+
+                  <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2">
+                    <label class="block text-slate-300 font-bold text-[11px]">Spazi di Competenza (se vuoto = Assegnato a Tutti gli Spazi)</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs" id="wh-pos-spaces-container">
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="wh-pos-space-cb cursor-pointer" value="space_reparto" />
+                        <span>⛺ Reparto Orione</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="wh-pos-space-cb cursor-pointer" value="space_coca" />
+                        <span>🏛️ Co.Ca. / Direzione</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="wh-pos-space-cb cursor-pointer" value="space_magazzino" />
+                        <span>🛠️ Magazzino & Logistica</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="wh-pos-space-cb cursor-pointer" value="space-default" />
+                        <span>📦 Spazio Generale</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer bg-slate-900 p-2 rounded border border-slate-800 hover:border-slate-700">
+                        <input type="checkbox" class="wh-pos-space-cb cursor-pointer" value="amministrazione" />
+                        <span>🏛️ Governance</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="flex justify-end pt-1 gap-2">
+                    <button type="button" id="wh-pos-save-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded shadow transition-all cursor-pointer">
+                      📦 Registra Posizione Magazzino
+                    </button>
+                  </div>
+                </div>
+
+                <!-- MOUNT LISTA POSIZIONI -->
+                <div class="wh-positions-mount space-y-2 pt-2">
+                  <div class="text-slate-500 italic p-3 text-center border border-slate-800 rounded">Caricamento posizioni magazzino in corso...</div>
+                </div>
+              </div>
+            </div>
+
           </main>
 
         </div>
@@ -698,6 +827,7 @@ export class PermissionsPlugin implements AppPlugin {
     this.loadStorageMappings(container, dataState);
     this.loadSpacesMasterGrid(container, dataState, canManage);
     this.loadAccountingSettings(container, dataState);
+    this.loadWarehousePositions(container, dataState);
     this.bindEvents(container, dataState, canManage, isLegalRep);
   }
 
@@ -1076,33 +1206,107 @@ export class PermissionsPlugin implements AppPlugin {
       if (accEnabledCb) accEnabledCb.checked = !!isAccEnabled;
       if (accCcEnabledCb) accCcEnabledCb.checked = !!isCcEnabled;
 
+      const ccManagementBlock = container.querySelector('#acc-cc-management-block');
+      if (ccManagementBlock) {
+        ccManagementBlock.classList.toggle('hidden', !isCcEnabled);
+      }
+
       // Rendereing Centri di Costo
       if (costCentersMount) {
+        const spaceLabels: Record<string, string> = {
+          'space_reparto': '⛺ Reparto',
+          'space_coca': '🏛️ Co.Ca.',
+          'space_magazzino': '🛠️ Magazzino',
+          'space-default': '📦 Generale',
+          'amministrazione': '🏛️ Governance'
+        };
+
         const costCenters = await costCenterRegistry.resolveOptions(null);
         if (costCenters.length === 0) {
           costCentersMount.innerHTML = `<div class="text-slate-500 italic p-3 text-center border border-slate-800 rounded">Nessun Centro di Costo registrato.</div>`;
         } else {
           costCentersMount.innerHTML = costCenters
-            .map(
-              (cc) => `
+            .map((cc) => {
+              const assignedSpaces = cc.spaceIds && cc.spaceIds.length > 0 ? cc.spaceIds : cc.spaceId ? [cc.spaceId] : ['space-default'];
+              const spacesBadges = assignedSpaces
+                .map((s) => `<span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.5 rounded font-mono">${spaceLabels[s] || s}</span>`)
+                .join(' ');
+
+              return `
             <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
-              <div>
-                <div class="font-bold text-slate-100 flex items-center gap-2">
+              <div class="space-y-1">
+                <div class="font-bold text-slate-100 flex items-center gap-2 flex-wrap">
                   <span>📊 ${cc.label}</span>
                   <span class="text-[10px] bg-slate-800 border border-slate-700 px-2 py-0.5 rounded text-blue-300 font-mono">${cc.budgetCode || 'NO-CODE'}</span>
-                  ${cc.spaceId ? `<span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded font-mono">${cc.spaceId}</span>` : ''}
+                  ${spacesBadges}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-1">
+                <div class="text-[10px] text-slate-400">
                   Validità: ${cc.validFrom || 'Indefinito'} ➔ ${cc.validTo || 'Senza Scadenza'} | Budget Allocato: <strong class="text-emerald-400">€ ${cc.allocatedBudget || 0}</strong>
                 </div>
               </div>
-              <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2.5 py-1 rounded font-bold">
-                ATTIVO
-              </span>
+              <div class="flex items-center gap-2 self-end sm:self-center">
+                <button data-edit-cc="${cc.value}" class="edit-cc-btn bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1">
+                  <span>✏️</span>
+                  <span>Modifica</span>
+                </button>
+                <button data-delete-cc="${cc.value}" class="delete-cc-btn bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors">
+                  🗑️
+                </button>
+              </div>
             </div>
-          `
-            )
+          `;
+            })
             .join('');
+
+          // Eventi Modifica ed Eliminazione
+          costCentersMount.querySelectorAll('.edit-cc-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const val = (btn as HTMLElement).dataset.editCc;
+              const targetCc = costCenters.find((c) => c.value === val);
+              if (!targetCc) return;
+
+              const labelInput = container.querySelector<HTMLInputElement>('#cc-label-input');
+              const codeInput = container.querySelector<HTMLInputElement>('#cc-code-input');
+              const budgetInput = container.querySelector<HTMLInputElement>('#cc-budget-input');
+              const validFromInput = container.querySelector<HTMLInputElement>('#cc-valid-from');
+              const validToInput = container.querySelector<HTMLInputElement>('#cc-valid-to');
+              const editingValueInput = container.querySelector<HTMLInputElement>('#cc-editing-value');
+              const formTitle = container.querySelector('#cc-form-title');
+              const addBtn = container.querySelector('#add-cost-center-btn');
+              const cancelBtn = container.querySelector('#cancel-edit-cc-btn');
+
+              if (labelInput) labelInput.value = targetCc.label || '';
+              if (codeInput) codeInput.value = targetCc.budgetCode || '';
+              if (budgetInput) budgetInput.value = targetCc.allocatedBudget !== undefined ? targetCc.allocatedBudget.toString() : '';
+              if (validFromInput) validFromInput.value = targetCc.validFrom || '2025-10-01';
+              if (validToInput) validToInput.value = targetCc.validTo || '2026-09-30';
+              if (editingValueInput) editingValueInput.value = targetCc.value;
+
+              const assigned = targetCc.spaceIds && targetCc.spaceIds.length > 0 ? targetCc.spaceIds : targetCc.spaceId ? [targetCc.spaceId] : [];
+              container.querySelectorAll<HTMLInputElement>('.cc-space-cb').forEach((cb) => {
+                cb.checked = assigned.includes(cb.value);
+              });
+
+              if (formTitle) formTitle.textContent = `✏️ Modifica Centro di Costo (${targetCc.budgetCode || targetCc.value}):`;
+              if (addBtn) addBtn.innerHTML = `💾 Salva Modifiche Centro di Costo`;
+              if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+              container.querySelector('#cc-form-container')?.scrollIntoView({ behavior: 'smooth' });
+            });
+          });
+
+          costCentersMount.querySelectorAll('.delete-cc-btn').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+              const val = (btn as HTMLElement).dataset.deleteCc;
+              const targetCc = costCenters.find((c) => c.value === val);
+              if (!targetCc) return;
+
+              if (confirm(`Sei sicuro di voler eliminare il Centro di Costo "${targetCc.label}" (${targetCc.budgetCode})?`)) {
+                await costCenterRegistry.deleteCostCenter(val!);
+                this.loadAccountingSettings(container, dataState);
+              }
+            });
+          });
         }
       }
 
@@ -1151,7 +1355,217 @@ export class PermissionsPlugin implements AppPlugin {
     }
   }
 
+  private async loadWarehousePositions(container: HTMLElement, _dataState: PermissionsPluginState): Promise<void> {
+    const mount = container.querySelector('.wh-positions-mount');
+    if (!mount) return;
+
+    try {
+      const positionsSetting = await db.settings.get('warehouse.positions');
+      const positions: Array<{
+        id: string;
+        nome: string;
+        location: string;
+        responsabile: string;
+        note: string;
+        spaceIds: string[];
+      }> = positionsSetting?.value || [
+        {
+          id: 'pos_sede_main',
+          nome: '🛠️ Magazzino Sede Principale',
+          location: 'Sede Ente - Piano Terra Stanza B',
+          responsabile: 'Mario Rossi (Capo Magazziniere)',
+          note: 'Chiavi in rastrelliera direttivo. Attenzione all\'umidità nell\'angolo est.',
+          spaceIds: []
+        },
+        {
+          id: 'pos_deposito_reparto',
+          nome: '⛺ Deposito Materiale di Branca',
+          location: 'Sede Ente - Stanza Reparto Orione',
+          responsabile: 'Giuseppe Bianchi',
+          note: 'Contiene tende, picchetti, paleria e casse per uscite.',
+          spaceIds: ['space_reparto']
+        }
+      ];
+
+      const spaceLabels: Record<string, string> = {
+        'space_reparto': '⛺ Reparto',
+        'space_coca': '🏛️ Co.Ca.',
+        'space_magazzino': '🛠️ Magazzino',
+        'space-default': '📦 Generale',
+        'amministrazione': '🏛️ Governance'
+      };
+
+      if (positions.length === 0) {
+        mount.innerHTML = `<div class="text-slate-500 italic p-3 text-center border border-slate-800 rounded">Nessuna Posizione Magazzino registrata.</div>`;
+        return;
+      }
+
+      mount.innerHTML = positions
+        .map((p) => {
+          const spaceBadges = p.spaceIds && p.spaceIds.length > 0
+            ? p.spaceIds.map((s) => `<span class="text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800 px-1.5 py-0.5 rounded font-mono">${spaceLabels[s] || s}</span>`).join(' ')
+            : `<span class="text-[10px] bg-slate-800 text-slate-300 border border-slate-700 px-1.5 py-0.5 rounded font-mono">🌐 Tutti gli Spazi</span>`;
+
+          return `
+          <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
+            <div class="space-y-1">
+              <div class="font-bold text-slate-100 flex items-center gap-2 flex-wrap">
+                <span>📦 ${p.nome}</span>
+                ${spaceBadges}
+              </div>
+              <div class="text-[10px] text-slate-400">
+                Ubicazione: <strong>${p.location || 'Non specificata'}</strong> | Referente: <strong>${p.responsabile || 'Non specificato'}</strong>
+              </div>
+              ${p.note ? `<div class="text-[10px] text-amber-300 italic">⚠️ Note & Attenzioni: ${p.note}</div>` : ''}
+            </div>
+            <div class="flex items-center gap-2 self-end sm:self-center">
+              <button data-edit-pos="${p.id}" class="edit-wh-pos-btn bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1">
+                <span>✏️</span>
+                <span>Modifica</span>
+              </button>
+              <button data-delete-pos="${p.id}" class="delete-wh-pos-btn bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 px-2.5 py-1 rounded text-[11px] font-bold cursor-pointer transition-colors">
+                🗑️
+              </button>
+            </div>
+          </div>
+        `;
+        })
+        .join('');
+
+      mount.querySelectorAll('.edit-wh-pos-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const posId = (btn as HTMLElement).dataset.editPos;
+          const target = positions.find((p) => p.id === posId);
+          if (!target) return;
+
+          const nameInput = container.querySelector<HTMLInputElement>('#wh-pos-name-input');
+          const locInput = container.querySelector<HTMLInputElement>('#wh-pos-loc-input');
+          const respInput = container.querySelector<HTMLInputElement>('#wh-pos-resp-input');
+          const notesInput = container.querySelector<HTMLInputElement>('#wh-pos-notes-input');
+          const editingIdInput = container.querySelector<HTMLInputElement>('#wh-pos-editing-id');
+          const formTitle = container.querySelector('#wh-pos-form-title');
+          const saveBtn = container.querySelector('#wh-pos-save-btn');
+          const cancelBtn = container.querySelector('#wh-pos-cancel-btn');
+
+          if (nameInput) nameInput.value = target.nome || '';
+          if (locInput) locInput.value = target.location || '';
+          if (respInput) respInput.value = target.responsabile || '';
+          if (notesInput) notesInput.value = target.note || '';
+          if (editingIdInput) editingIdInput.value = target.id;
+
+          const assigned = target.spaceIds || [];
+          container.querySelectorAll<HTMLInputElement>('.wh-pos-space-cb').forEach((cb) => {
+            cb.checked = assigned.includes(cb.value);
+          });
+
+          if (formTitle) formTitle.textContent = `✏️ Modifica Posizione (${target.nome}):`;
+          if (saveBtn) saveBtn.innerHTML = `💾 Salva Modifiche Posizione`;
+          if (cancelBtn) cancelBtn.classList.remove('hidden');
+
+          container.querySelector('#wh-pos-form-container')?.scrollIntoView({ behavior: 'smooth' });
+        });
+      });
+
+      mount.querySelectorAll('.delete-wh-pos-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const posId = (btn as HTMLElement).dataset.deletePos;
+          const target = positions.find((p) => p.id === posId);
+          if (!target) return;
+
+          if (confirm(`Sei sicuro di voler eliminare la Posizione Magazzino "${target.nome}"?`)) {
+            const updated = positions.filter((p) => p.id !== posId);
+            await db.settings.put({
+              key: 'warehouse.positions',
+              value: updated,
+              lastUpdated: Date.now()
+            });
+            this.loadWarehousePositions(container, _dataState);
+          }
+        });
+      });
+    } catch (e) {
+      console.warn('[PermissionsPlugin] Errore caricamento posizioni magazzino:', e);
+    }
+  }
+
   private bindEvents(container: HTMLElement, dataState: PermissionsPluginState, canManage: boolean, isLegalRep: boolean): void {
+    // Reset Form Posizione Magazzino
+    const resetWhPosForm = () => {
+      const nameInput = container.querySelector<HTMLInputElement>('#wh-pos-name-input');
+      const locInput = container.querySelector<HTMLInputElement>('#wh-pos-loc-input');
+      const respInput = container.querySelector<HTMLInputElement>('#wh-pos-resp-input');
+      const notesInput = container.querySelector<HTMLInputElement>('#wh-pos-notes-input');
+      const editingIdInput = container.querySelector<HTMLInputElement>('#wh-pos-editing-id');
+      const formTitle = container.querySelector('#wh-pos-form-title');
+      const saveBtn = container.querySelector('#wh-pos-save-btn');
+      const cancelBtn = container.querySelector('#wh-pos-cancel-btn');
+
+      if (nameInput) nameInput.value = '';
+      if (locInput) locInput.value = '';
+      if (respInput) respInput.value = '';
+      if (notesInput) notesInput.value = '';
+      if (editingIdInput) editingIdInput.value = '';
+      if (formTitle) formTitle.textContent = '➕ Registra Nuova Posizione:';
+      if (saveBtn) saveBtn.innerHTML = '📦 Registra Posizione Magazzino';
+      if (cancelBtn) cancelBtn.classList.add('hidden');
+
+      container.querySelectorAll<HTMLInputElement>('.wh-pos-space-cb').forEach((cb) => (cb.checked = false));
+    };
+
+    container.querySelector('#wh-pos-cancel-btn')?.addEventListener('click', resetWhPosForm);
+
+    // Salva / Registra Posizione Magazzino
+    container.querySelector('#wh-pos-save-btn')?.addEventListener('click', async () => {
+      const nameInput = container.querySelector<HTMLInputElement>('#wh-pos-name-input');
+      const locInput = container.querySelector<HTMLInputElement>('#wh-pos-loc-input');
+      const respInput = container.querySelector<HTMLInputElement>('#wh-pos-resp-input');
+      const notesInput = container.querySelector<HTMLInputElement>('#wh-pos-notes-input');
+      const editingIdInput = container.querySelector<HTMLInputElement>('#wh-pos-editing-id');
+
+      if (!nameInput || !nameInput.value.trim()) {
+        alert('Inserisci il Nome della Posizione.');
+        return;
+      }
+
+      const nome = nameInput.value.trim();
+      const location = locInput?.value.trim() || '';
+      const responsabile = respInput?.value.trim() || '';
+      const note = notesInput?.value.trim() || '';
+      const editingId = editingIdInput?.value.trim();
+
+      const selSpaceCbs = container.querySelectorAll<HTMLInputElement>('.wh-pos-space-cb:checked');
+      const spaceIds = Array.from(selSpaceCbs).map((c) => c.value);
+
+      const positionsSetting = await db.settings.get('warehouse.positions');
+      let positions = positionsSetting?.value || [];
+
+      const posId = editingId || `pos_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`;
+      const posRecord = {
+        id: posId,
+        nome,
+        location,
+        responsabile,
+        note,
+        spaceIds
+      };
+
+      const idx = positions.findIndex((p: any) => p.id === posId);
+      if (idx >= 0) {
+        positions[idx] = posRecord;
+      } else {
+        positions.push(posRecord);
+      }
+
+      await db.settings.put({
+        key: 'warehouse.positions',
+        value: positions,
+        lastUpdated: Date.now()
+      });
+
+      alert(`✅ Posizione Magazzino "${nome}" ${editingId ? 'modificata' : 'registrata'} con successo.`);
+      resetWhPosForm();
+      this.loadWarehousePositions(container, dataState);
+    });
     // Cambio Tab Sidebar
     container.querySelectorAll('.settings-sidebar-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -1367,28 +1781,72 @@ export class PermissionsPlugin implements AppPlugin {
           value: isChecked,
           lastUpdated: Date.now()
         });
+        const ccManagementBlock = container.querySelector('#acc-cc-management-block');
+        if (ccManagementBlock) {
+          ccManagementBlock.classList.toggle('hidden', !isChecked);
+        }
         alert(`✅ Opzione Centri di Costo (accounting.costCentersEnabled) impostata a: ${isChecked}.`);
       });
 
-      // Registra Nuovo Centro di Costo
+      // Toggle Seleziona Tutti Spazi
+      container.querySelector('#cc-select-all-spaces-btn')?.addEventListener('click', () => {
+        const checkboxes = container.querySelectorAll<HTMLInputElement>('.cc-space-cb');
+        const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+        checkboxes.forEach((cb) => (cb.checked = !allChecked));
+      });
+
+      // Reset Form Centro di Costo
+      const resetCcForm = () => {
+        const labelInput = container.querySelector<HTMLInputElement>('#cc-label-input');
+        const codeInput = container.querySelector<HTMLInputElement>('#cc-code-input');
+        const budgetInput = container.querySelector<HTMLInputElement>('#cc-budget-input');
+        const editingValueInput = container.querySelector<HTMLInputElement>('#cc-editing-value');
+        const formTitle = container.querySelector('#cc-form-title');
+        const addBtn = container.querySelector('#add-cost-center-btn');
+        const cancelBtn = container.querySelector('#cancel-edit-cc-btn');
+
+        if (labelInput) labelInput.value = '';
+        if (codeInput) codeInput.value = '';
+        if (budgetInput) budgetInput.value = '';
+        if (editingValueInput) editingValueInput.value = '';
+        if (formTitle) formTitle.textContent = '➕ Registra Nuovo Centro di Costo:';
+        if (addBtn) addBtn.innerHTML = '📊 Registra Centro di Costo';
+        if (cancelBtn) cancelBtn.classList.add('hidden');
+
+        container.querySelectorAll<HTMLInputElement>('.cc-space-cb').forEach((cb, idx) => {
+          cb.checked = idx === 0;
+        });
+      };
+
+      container.querySelector('#cancel-edit-cc-btn')?.addEventListener('click', resetCcForm);
+
+      // Registra / Salva Centro di Costo
       container.querySelector('#add-cost-center-btn')?.addEventListener('click', async () => {
         const labelInput = container.querySelector<HTMLInputElement>('#cc-label-input');
         const codeInput = container.querySelector<HTMLInputElement>('#cc-code-input');
         const budgetInput = container.querySelector<HTMLInputElement>('#cc-budget-input');
-        const spaceSelect = container.querySelector<HTMLSelectElement>('#cc-space-select');
         const validFromInput = container.querySelector<HTMLInputElement>('#cc-valid-from');
         const validToInput = container.querySelector<HTMLInputElement>('#cc-valid-to');
+        const editingValueInput = container.querySelector<HTMLInputElement>('#cc-editing-value');
+
+        const selectedSpaceCbs = container.querySelectorAll<HTMLInputElement>('.cc-space-cb:checked');
+        const selectedSpaceIds = Array.from(selectedSpaceCbs).map((cb) => cb.value);
 
         if (!labelInput?.value.trim() || !codeInput?.value.trim()) {
           alert('Inserisci sia l\'Etichetta che il Codice Budget per il Centro di Costo.');
           return;
         }
 
+        if (selectedSpaceIds.length === 0) {
+          alert('Seleziona almeno uno Spazio di Competenza a cui assegnare il Centro di Costo.');
+          return;
+        }
+
         const label = labelInput.value.trim();
         const budgetCode = codeInput.value.trim();
-        const value = `cdc_${budgetCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        const editingVal = editingValueInput?.value.trim();
+        const value = editingVal || `cdc_${budgetCode.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
         const allocatedBudget = parseFloat(budgetInput?.value || '0');
-        const spaceId = spaceSelect?.value || 'space-default';
         const validFrom = validFromInput?.value || '2025-10-01';
         const validTo = validToInput?.value || '2026-09-30';
 
@@ -1397,16 +1855,15 @@ export class PermissionsPlugin implements AppPlugin {
           label,
           budgetCode,
           allocatedBudget,
-          spaceId,
+          spaceId: selectedSpaceIds[0],
+          spaceIds: selectedSpaceIds,
           validFrom,
           validTo,
           renewalPolicy: 'AUTO_RENEWAL'
         });
 
-        alert(`✅ Centro di Costo "${label}" (${budgetCode}) registrato con successo.`);
-        labelInput.value = '';
-        codeInput.value = '';
-        if (budgetInput) budgetInput.value = '';
+        alert(`✅ Centro di Costo "${label}" (${budgetCode}) ${editingVal ? 'modificato' : 'registrato'} con successo per ${selectedSpaceIds.length} spazio/i.`);
+        resetCcForm();
         this.loadAccountingSettings(container, dataState);
       });
 

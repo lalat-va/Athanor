@@ -18,6 +18,7 @@ import { TaskPlugin } from './plugins/TaskPlugin.js';
 import { ContactsPlugin } from './plugins/ContactsPlugin.js';
 import { PermissionsPlugin } from './plugins/PermissionsPlugin.js';
 import { AccountingPlugin } from './plugins/AccountingPlugin.js';
+import { WarehousePlugin } from './plugins/WarehousePlugin.js';
 import { automationEngine } from './modules/AutomationEngine.js';
 import { permissionManager } from './modules/PermissionManager.js';
 import { CollabService } from './base/CollabService.js';
@@ -35,17 +36,19 @@ async function bootstrapApp(): Promise<void> {
   const authAdapter = new MockAuthAdapter();
   await i18nManager.init(db, eventBus);
 
-  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC) e Rendicontazione (Contabilità)
+  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC), Rendicontazione e Magazzino
   const mapPlugin = new MapPlugin();
   const taskPlugin = new TaskPlugin();
   const contactsPlugin = new ContactsPlugin();
   const permissionsPlugin = new PermissionsPlugin();
   const accountingPlugin = new AccountingPlugin();
+  const warehousePlugin = new WarehousePlugin();
   await pluginManager.registerPlugin(mapPlugin);
   await pluginManager.registerPlugin(taskPlugin);
   await pluginManager.registerPlugin(contactsPlugin);
   await pluginManager.registerPlugin(permissionsPlugin);
   await pluginManager.registerPlugin(accountingPlugin);
+  await pluginManager.registerPlugin(warehousePlugin);
 
   // 3. Avvio del monitor di sicurezza attivo ActiveKillSwitch (Remote Wipe Polling)
   const activeKillSwitch = ActiveKillSwitch.getInstance(storageAdapter);
@@ -443,6 +446,17 @@ async function initializeMainShell(
             pluginId: 'accounting-tool',
             activeTab: 'transactions',
             activeFiscalYear: new Date().getFullYear(),
+            searchQuery: ''
+          },
+          true
+        );
+      } else if (payload && payload.pluginId === 'warehouse-tool') {
+        console.log('[main.ts] Inserimento del modulo Magazzino & Logistica nel canvas dell\'editor...');
+        editorCore.insertPluginBlock(
+          'warehouse-tool',
+          {
+            pluginId: 'warehouse-tool',
+            activeSpaceId: 'space-default',
             searchQuery: ''
           },
           true

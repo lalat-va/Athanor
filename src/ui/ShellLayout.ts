@@ -222,6 +222,11 @@ export class ShellLayout {
                   <span class="text-base group-hover:scale-110 transition-transform">💰</span>
                   <span>Rendicontazione & Contabilità</span>
                 </button>
+
+                <button id="btn-launch-warehouse-plugin" class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">🛠️</span>
+                  <span>Magazzino & Logistica</span>
+                </button>
               </div>
 
               <div class="text-[10px] text-slate-500 pt-2 border-t border-slate-800/60">
@@ -419,6 +424,12 @@ export class ShellLayout {
     this.container.querySelector('#btn-launch-accounting-plugin')?.addEventListener('click', () => {
       console.log('[ShellLayout] Richiesta attivazione Plugin Rendicontazione & Contabilità...');
       this.bus.emit('plugin:launch', { pluginId: 'accounting-tool' });
+    });
+
+    // Event listener per Magazzino & Logistica
+    this.container.querySelector('#btn-launch-warehouse-plugin')?.addEventListener('click', () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Magazzino & Logistica...');
+      this.bus.emit('plugin:launch', { pluginId: 'warehouse-tool' });
     });
   }
 
