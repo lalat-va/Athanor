@@ -10,20 +10,60 @@
 
 export type SyncStatusType = 'offline' | 'connecting' | 'synced' | 'error';
 
+export type StructuredTaskType =
+  | 'INSERIMENTO'
+  | 'ACQUISTA_GIA_ESISTENTE'
+  | 'ACQUISTA_NON_ESISTENTE'
+  | 'AGGIORNAMENTO_ENTRATA'
+  | 'AGGIORNAMENTO_USCITA'
+  | 'DA_FARE'
+  | 'ELIMINAZIONE'
+  | 'AGGIUNGI'
+  | 'RECUPERO'
+  | 'ALTRO'
+  | 'OPERATIVO'
+  | 'AMMINISTRATIVO'
+  | 'BUROCRATICO';
+
+export type StructuredTaskAmbito =
+  | 'EVENTO'
+  | 'ATTIVITA'
+  | 'MAGAZZINO'
+  | 'RENDICONTAZIONE'
+  | 'ALTRO'
+  | 'GENERALE'
+  | 'MENU';
+
 export interface TaskItemAttributes {
   taskId: string;
+  spaceId?: string;
   parentId?: string | null;
-  taskType: 'OPERATIVO' | 'AMMINISTRATIVO' | 'BUROCRATICO';
-  category: 'GENERALE' | 'MAGAZZINO' | 'RENDICONTAZIONE' | 'MENU';
+  subtaskIds?: string[];
+  taskType: StructuredTaskType | string;
+  category?: StructuredTaskAmbito | string;
+  ambito?: StructuredTaskAmbito | string;
   description: string;
+  cosa?: string;
+  cosaLabel?: string;
+  quanto?: string | number;
+  scadenza?: string;
   dueDate?: string | null;
   assigneeId?: string | null;
+  assigneeContactId?: string | null;
+  assigneeName?: string | null;
   completed: boolean;
   completedAt?: number | null;
   completedBy?: string | null;
   openedBy: string;
+  inheritedMetadata?: {
+    sourcePluginId?: string;
+    eventId?: string;
+    eventName?: string;
+    eventDueDate?: string;
+    creatorId?: string;
+  };
   interaction?: {
-    actionType?: 'ACQUISTA' | 'PRELEVA' | 'RENDICONTA' | 'NESSUNA';
+    actionType?: 'ACQUISTA' | 'PRELEVA' | 'RENDICONTA' | 'NESSUNA' | string;
     targetItemId?: string | null;
     quantity?: number;
     cost?: number;

@@ -396,22 +396,7 @@ async function initializeMainShell(
           'task-tool',
           {
             pluginId: 'task-tool',
-            tasks: [
-              {
-                taskId: `tsk-init-${Date.now()}`,
-                parentId: null,
-                taskType: 'OPERATIVO',
-                category: 'GENERALE',
-                description: 'Verificare materiali e attrezzature prima dell\'uscita',
-                dueDate: null,
-                assigneeId: null,
-                completed: false,
-                completedAt: null,
-                completedBy: null,
-                openedBy: userEmail,
-                interaction: { actionType: 'NESSUNA' }
-              }
-            ]
+            tasks: []
           },
           true
         );

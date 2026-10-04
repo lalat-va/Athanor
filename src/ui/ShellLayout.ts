@@ -13,6 +13,7 @@ import { i18nManager, I18nManager } from '../base/I18nManager.js';
 import { db } from '../base/Database.js';
 import { permissionManager } from '../modules/PermissionManager.js';
 import { MockAuthAdapter, UserSession } from '../modules/AuthAdapter.js';
+import { SpaceDashboard } from './SpaceDashboard.js';
 
 export type ThemeType = 'nord' | 'dracula';
 
@@ -236,9 +237,15 @@ export class ShellLayout {
 
           </aside>
 
-          <!-- MAIN EDITOR CANVAS (DESTRO/CENTRALE): Si adatta dinamicamente alla larghezza -->
-          <main class="col-span-12 lg:col-span-8 xl:col-span-9 h-full p-4 overflow-y-auto bg-[var(--bg-primary,#0f172a)] flex flex-col">
-            <div id="shell-editor-mount" class="flex-1 border border-[var(--border-color,#1e293b)] rounded-lg p-4 bg-[var(--bg-secondary,#1e293b)] shadow-xl overflow-y-auto min-h-[500px]"></div>
+          <!-- MAIN CANVAS (DESTRO/CENTRALE): DIVISA IN DASHBOARD SUPERIORE ED EDITOR INFERIORE -->
+          <main class="col-span-12 lg:col-span-8 xl:col-span-9 h-full p-4 overflow-y-auto bg-[var(--bg-primary,#0f172a)] flex flex-col gap-4">
+            
+            <!-- DASHBOARD OPERATIVA SUPERIORE (CALENDARIO MESE & TASK PER PERSONA) -->
+            <div id="space-dashboard-mount" class="w-full shrink-0"></div>
+
+            <!-- CANVAS EDITOR INFERIORE -->
+            <div id="shell-editor-mount" class="flex-1 border border-[var(--border-color,#1e293b)] rounded-lg p-4 bg-[var(--bg-secondary,#1e293b)] shadow-xl overflow-y-auto min-h-[350px]"></div>
+
           </main>
 
         </div>
@@ -259,6 +266,14 @@ export class ShellLayout {
 
     this.bindEvents();
     this.populateWorkspaceSwitcher();
+
+    // Inizializzazione Dashboard Operativa Superiore (Calendario Mese & Assegnazioni Task)
+    const dashMount = this.container.querySelector<HTMLElement>('#space-dashboard-mount');
+    if (dashMount) {
+      const spaceDash = new SpaceDashboard(dashMount);
+      const activeWorkspace = this.defaultWorkspaces.find((w) => w.spaceId === this.currentActiveSpaceId);
+      spaceDash.init(this.currentActiveSpaceId, activeWorkspace?.name || this.currentActiveSpaceId);
+    }
   }
 
   private renderSyncIndicatorHTML(): string {
