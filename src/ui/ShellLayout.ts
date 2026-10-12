@@ -17,6 +17,16 @@ import { SpaceDashboard } from './SpaceDashboard.js';
 
 export type ThemeType = 'nord' | 'dracula';
 
+export const PLUGIN_TITLES: Record<string, string> = {
+  'map-tool': '<span>🗺️</span> <span>Mappe & Spostamenti</span>',
+  'task-tool': '<span>✅</span> <span>Smart Task Manager</span>',
+  'contacts-tool': '<span>📇</span> <span>Rubrica Anagrafica (IdP)</span>',
+  'permissions-tool': '<span>⚙️</span> <span>Impostazioni Ente & Permessi</span>',
+  'accounting-tool': '<span>💰</span> <span>Rendicontazione & Contabilità</span>',
+  'warehouse-tool': '<span>🛠️</span> <span>Magazzino & Logistica</span>',
+  'minutes-tool': '<span>📝</span> <span>Verbali & Decisioni</span>'
+};
+
 export interface WorkspaceItem {
   spaceId: string;
   name: string;
@@ -33,6 +43,7 @@ export class ShellLayout {
   private currentSyncStatus: SyncStatusType = 'synced';
   private currentTheme: ThemeType = 'nord';
   private currentActiveSpaceId: string = 'space-default';
+  private currentActivePluginId: string | null = null;
 
   private defaultWorkspaces: WorkspaceItem[] = [
     { spaceId: 'space-default', name: '📦 Spazio Operativo Generale', category: 'Generale', userRole: 'Responsabile Legale / Amministratore' },
@@ -162,9 +173,12 @@ export class ShellLayout {
                 </div>
 
                 <nav class="space-y-1 text-xs pt-2">
-                  <a href="#" class="flex items-center gap-2 px-3 py-2 rounded bg-blue-950 text-blue-200 border border-blue-800 font-semibold">
-                    📋 Spazio Documenti & Verbali
-                  </a>
+                  <button id="nav-home-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded bg-blue-600 text-white font-bold cursor-pointer shadow transition-all">
+                    🏠 Home (Calendario & Task)
+                  </button>
+                  <button id="nav-minutes-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer">
+                    📝 Verbali & Decisioni
+                  </button>
                   <button id="nav-rubrica-btn" class="w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer">
                     👥 Rubrica Anagrafica (IdP)
                   </button>
@@ -228,6 +242,11 @@ export class ShellLayout {
                   <span class="text-base group-hover:scale-110 transition-transform">🛠️</span>
                   <span>Magazzino & Logistica</span>
                 </button>
+
+                <button id="btn-launch-minutes-plugin" class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">📝</span>
+                  <span>Verbali & Decisioni</span>
+                </button>
               </div>
 
               <div class="text-[10px] text-slate-500 pt-2 border-t border-slate-800/60">
@@ -237,14 +256,35 @@ export class ShellLayout {
 
           </aside>
 
-          <!-- MAIN CANVAS (DESTRO/CENTRALE): DIVISA IN DASHBOARD SUPERIORE ED EDITOR INFERIORE -->
+          <!-- MAIN CANVAS (DESTRO/CENTRALE): HOME CON CALENDARIO OPPURE SCHERMATA DEL PLUGIN -->
           <main class="col-span-12 lg:col-span-8 xl:col-span-9 h-full p-4 overflow-y-auto bg-[var(--bg-primary,#0f172a)] flex flex-col gap-4">
             
-            <!-- DASHBOARD OPERATIVA SUPERIORE (CALENDARIO MESE & TASK PER PERSONA) -->
+            <!-- BARRA CONTESTUALE DEL PLUGIN (VISIBILE SOLO ALL'APERTURA DI UN PLUGIN) -->
+            <div id="plugin-nav-bar" class="hidden w-full flex items-center justify-between bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 shadow-md shrink-0">
+              <div class="flex items-center gap-3">
+                <button id="btn-back-to-home" class="bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition-colors flex items-center gap-1.5 cursor-pointer">
+                  <span>🏠</span>
+                  <span>Torna alla Home (Calendario & Task)</span>
+                </button>
+                <span class="text-slate-600">|</span>
+                <span id="active-plugin-title" class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span>📦</span>
+                  <span>Plugin</span>
+                </span>
+              </div>
+              <div class="text-[11px] text-slate-400 font-mono">
+                Spazio Attivo: <span id="plugin-bar-space-id" class="text-blue-400 font-bold">${this.currentActiveSpaceId}</span>
+              </div>
+            </div>
+
+            <!-- DASHBOARD OPERATIVA HOME PAGE (CALENDARIO MESE & TASK PER PERSONA) -->
             <div id="space-dashboard-mount" class="w-full shrink-0"></div>
 
-            <!-- CANVAS EDITOR INFERIORE -->
-            <div id="shell-editor-mount" class="flex-1 border border-[var(--border-color,#1e293b)] rounded-lg p-4 bg-[var(--bg-secondary,#1e293b)] shadow-xl overflow-y-auto min-h-[350px]"></div>
+            <!-- AREA INFERIORE VUOTA DELLA HOME PAGE -->
+            <div id="home-empty-bottom" class="flex-1 min-h-[150px]"></div>
+
+            <!-- CANVAS PLUGIN / EDITOR (A TUTTO SPAZIO ALL'APERTURA DEI PLUGIN) -->
+            <div id="shell-editor-mount" class="hidden flex-1 border border-[var(--border-color,#1e293b)] rounded-lg p-4 bg-[var(--bg-secondary,#1e293b)] shadow-xl overflow-y-auto min-h-[500px]"></div>
 
           </main>
 
@@ -388,7 +428,10 @@ export class ShellLayout {
 
       console.log(`[ShellLayout] 🔄 CAMBIO SPAZIO DI LAVORO ESEGUITO: "${selectedSpaceId}" (${spaceName})`);
 
-      // Emotione evento globale di cambio spazio per aggiornare la visuale dei dati ed il Y.Doc
+      // Torna automaticamente alla Home Page con il calendario del nuovo spazio
+      this.switchToHomeView();
+
+      // Emette evento globale di cambio spazio per aggiornare la visuale dei dati ed il Y.Doc
       this.bus.emit('space:changed', {
         spaceId: selectedSpaceId,
         spaceName
@@ -403,6 +446,24 @@ export class ShellLayout {
       const nextLocale = this.i18n.getLocale() === 'it' ? 'en' : 'it';
       await this.i18n.setLocale(nextLocale);
       this.render();
+    });
+
+    // Event listener per ritorno alla Home Page
+    this.container.querySelector('#nav-home-btn')?.addEventListener('click', () => {
+      console.log('[ShellLayout] 🏠 Navigazione verso la Home dello Spazio (Calendario & Task)...');
+      this.switchToHomeView();
+    });
+
+    this.container.querySelector('#btn-back-to-home')?.addEventListener('click', () => {
+      console.log('[ShellLayout] 🏠 Ritorno alla Home dello Spazio dalla barra del plugin...');
+      this.switchToHomeView();
+    });
+
+    // Ascolto globale per l'apertura di un qualsiasi plugin -> La vista del calendario scompare
+    this.bus.on('plugin:launch', (payload: any) => {
+      if (payload && payload.pluginId) {
+        this.switchToPluginView(payload.pluginId);
+      }
     });
 
     // Event listener per la Rubrica
@@ -446,6 +507,83 @@ export class ShellLayout {
       console.log('[ShellLayout] Richiesta attivazione Plugin Magazzino & Logistica...');
       this.bus.emit('plugin:launch', { pluginId: 'warehouse-tool' });
     });
+
+    // Event listener per Verbali & Decisioni
+    const triggerMinutes = () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Verbali & Decisioni...');
+      this.bus.emit('plugin:launch', { pluginId: 'minutes-tool' });
+    };
+    this.container.querySelector('#nav-minutes-btn')?.addEventListener('click', triggerMinutes);
+    this.container.querySelector('#btn-launch-minutes-plugin')?.addEventListener('click', triggerMinutes);
+  }
+
+  public getActiveSpaceId(): string {
+    return this.currentActiveSpaceId;
+  }
+
+  public getCurrentActivePluginId(): string | null {
+    return this.currentActivePluginId;
+  }
+
+  /**
+   * Passa alla visuale HOME PAGE: mostra il calendario e i task attivi,
+   * lasciando la metà inferiore della pagina vuota.
+   */
+  public switchToHomeView(): void {
+    this.currentActivePluginId = null;
+
+    const dashMount = this.container.querySelector<HTMLElement>('#space-dashboard-mount');
+    const emptyBottom = this.container.querySelector<HTMLElement>('#home-empty-bottom');
+    const pluginBar = this.container.querySelector<HTMLElement>('#plugin-nav-bar');
+    const editorMount = this.container.querySelector<HTMLElement>('#shell-editor-mount');
+
+    if (dashMount) dashMount.classList.remove('hidden');
+    if (emptyBottom) emptyBottom.classList.remove('hidden');
+    if (pluginBar) pluginBar.classList.add('hidden');
+    if (editorMount) editorMount.classList.add('hidden');
+
+    this.updateNavButtonStyles(null);
+    this.bus.emit('view:home', { spaceId: this.currentActiveSpaceId });
+  }
+
+  /**
+   * Passa alla visuale PLUGIN: nasconde la schermata del calendario,
+   * e mostra il plugin a tutto schermo con la barra contestuale di ritorno.
+   */
+  public switchToPluginView(pluginId: string): void {
+    this.currentActivePluginId = pluginId;
+
+    const dashMount = this.container.querySelector<HTMLElement>('#space-dashboard-mount');
+    const emptyBottom = this.container.querySelector<HTMLElement>('#home-empty-bottom');
+    const pluginBar = this.container.querySelector<HTMLElement>('#plugin-nav-bar');
+    const editorMount = this.container.querySelector<HTMLElement>('#shell-editor-mount');
+    const pluginTitleEl = this.container.querySelector<HTMLElement>('#active-plugin-title');
+    const pluginSpaceEl = this.container.querySelector<HTMLElement>('#plugin-bar-space-id');
+
+    if (dashMount) dashMount.classList.add('hidden');
+    if (emptyBottom) emptyBottom.classList.add('hidden');
+    if (pluginBar) pluginBar.classList.remove('hidden');
+    if (editorMount) editorMount.classList.remove('hidden');
+
+    if (pluginTitleEl) {
+      pluginTitleEl.innerHTML = PLUGIN_TITLES[pluginId] || `<span>📦</span> <span>${pluginId}</span>`;
+    }
+    if (pluginSpaceEl) {
+      pluginSpaceEl.textContent = this.currentActiveSpaceId;
+    }
+
+    this.updateNavButtonStyles(pluginId);
+  }
+
+  private updateNavButtonStyles(activePluginId: string | null): void {
+    const homeBtn = this.container.querySelector<HTMLElement>('#nav-home-btn');
+    if (homeBtn) {
+      if (activePluginId === null) {
+        homeBtn.className = 'w-full text-left flex items-center gap-2 px-3 py-2 rounded bg-blue-600 text-white font-bold cursor-pointer shadow transition-all';
+      } else {
+        homeBtn.className = 'w-full text-left flex items-center gap-2 px-3 py-2 rounded text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer';
+      }
+    }
   }
 
   private showDisclaimerModal(): void {

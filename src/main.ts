@@ -19,6 +19,7 @@ import { ContactsPlugin } from './plugins/ContactsPlugin.js';
 import { PermissionsPlugin } from './plugins/PermissionsPlugin.js';
 import { AccountingPlugin } from './plugins/AccountingPlugin.js';
 import { WarehousePlugin } from './plugins/WarehousePlugin.js';
+import { MinutesPlugin } from './plugins/MinutesPlugin.js';
 import { automationEngine } from './modules/AutomationEngine.js';
 import { permissionManager } from './modules/PermissionManager.js';
 import { CollabService } from './base/CollabService.js';
@@ -36,19 +37,21 @@ async function bootstrapApp(): Promise<void> {
   const authAdapter = new MockAuthAdapter();
   await i18nManager.init(db, eventBus);
 
-  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC), Rendicontazione e Magazzino
+  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC), Rendicontazione, Magazzino e Verbali
   const mapPlugin = new MapPlugin();
   const taskPlugin = new TaskPlugin();
   const contactsPlugin = new ContactsPlugin();
   const permissionsPlugin = new PermissionsPlugin();
   const accountingPlugin = new AccountingPlugin();
   const warehousePlugin = new WarehousePlugin();
+  const minutesPlugin = new MinutesPlugin();
   await pluginManager.registerPlugin(mapPlugin);
   await pluginManager.registerPlugin(taskPlugin);
   await pluginManager.registerPlugin(contactsPlugin);
   await pluginManager.registerPlugin(permissionsPlugin);
   await pluginManager.registerPlugin(accountingPlugin);
   await pluginManager.registerPlugin(warehousePlugin);
+  await pluginManager.registerPlugin(minutesPlugin);
 
   // 3. Avvio del monitor di sicurezza attivo ActiveKillSwitch (Remote Wipe Polling)
   const activeKillSwitch = ActiveKillSwitch.getInstance(storageAdapter);
@@ -329,7 +332,7 @@ function showBlockingOnboardingModal(
  */
 async function initializeMainShell(
   container: HTMLElement,
-  docId: string,
+  _docId: string,
   mapPlugin: MapPlugin,
   contactsPlugin: ContactsPlugin,
   permissionsPlugin: PermissionsPlugin,
@@ -354,131 +357,105 @@ async function initializeMainShell(
 
   const editorMount = container.querySelector<HTMLElement>('#shell-editor-mount');
   if (editorMount) {
-    const existingDoc = await db.documents.get(docId);
-
-    const initialContent = existingDoc?.body || {
+    const editorCore = new EditorCore(editorMount, {
       type: 'doc',
-      content: [
-        {
-          type: 'heading',
-          attrs: { level: 2 },
-          content: [{ type: 'text', text: 'Documento Operativo Associazione' }]
-        },
-        {
-          type: 'paragraph',
-          content: [
-            {
-              type: 'text',
-              text: 'Benvenuti nella shell operativa dell\'Ecosistema Digitale per il Terzo Settore. Per attivare un modulo (Rubrica Anagrafica, Permessi & Spazi, Mappe o Smart Task Manager), clicca sul relativo pulsante nella barra laterale sinistra.'
-            }
-          ]
-        }
-      ]
-    };
-
-    const editorCore = new EditorCore(editorMount, initialContent);
+      content: []
+    });
 
     /**
      * LISTENER LANCIO PLUGIN:
-     * Inserisce i blocchi plugin nel canvas dell'editor su richiesta dell'utente
+     * Mostra la schermata del plugin selezionato a pieno schermo
      */
     eventBus.on('plugin:launch', async (payload: any) => {
       const currentSession = await authAdapter.getSession();
       const userEmail = currentSession?.email || 'test.athanor2@gmail.com';
       const userRoles = currentSession?.roles || ['RESPONSIBLE_LEGAL', 'ADMINISTRATOR'];
+      const activeSpaceId = payload?.activeSpaceId || shell.getActiveSpaceId() || 'space-default';
+
+      let stateData: any = {};
+      let isOrganizational = true;
 
       if (payload && payload.pluginId === 'map-tool') {
-        console.log('[main.ts] Inserimento del modulo Mappe nel canvas dell\'editor...');
-        editorCore.insertPluginBlock('map-tool', mapPlugin.createCleanInitialState(), false);
+        stateData = mapPlugin.createCleanInitialState();
+        isOrganizational = false;
       } else if (payload && payload.pluginId === 'task-tool') {
-        console.log('[main.ts] Inserimento del modulo Smart Task Manager nel canvas dell\'editor...');
-        editorCore.insertPluginBlock(
-          'task-tool',
-          {
-            pluginId: 'task-tool',
-            tasks: []
-          },
-          true
-        );
+        stateData = {
+          pluginId: 'task-tool',
+          tasks: []
+        };
       } else if (payload && payload.pluginId === 'contacts-tool') {
-        console.log('[main.ts] Inserimento del modulo Rubrica Anagrafica (IdP) nel canvas dell\'editor...');
-        editorCore.insertPluginBlock(
-          'contacts-tool',
-          {
-            pluginId: 'contacts-tool',
-            activeTab: 'internal',
-            searchQuery: ''
-          },
-          true
-        );
+        stateData = {
+          pluginId: 'contacts-tool',
+          activeTab: 'internal',
+          searchQuery: ''
+        };
       } else if (payload && payload.pluginId === 'permissions-tool') {
-        console.log('[main.ts] Inserimento della Console Permessi & Spazi (RBAC) nel canvas dell\'editor...');
-        editorCore.insertPluginBlock(
-          'permissions-tool',
-          {
-            pluginId: 'permissions-tool',
-            activeSpaceId: 'space-default',
-            currentUserRoles: userRoles as any,
-            currentUserId: userEmail
-          },
-          true
-        );
+        stateData = {
+          pluginId: 'permissions-tool',
+          activeSpaceId: activeSpaceId,
+          currentUserRoles: userRoles as any,
+          currentUserId: userEmail
+        };
       } else if (payload && payload.pluginId === 'accounting-tool') {
-        console.log('[main.ts] Inserimento del modulo Rendicontazione & Contabilità nel canvas dell\'editor...');
-        editorCore.insertPluginBlock(
-          'accounting-tool',
-          {
-            pluginId: 'accounting-tool',
-            activeTab: 'transactions',
-            activeFiscalYear: new Date().getFullYear(),
-            searchQuery: ''
-          },
-          true
-        );
+        stateData = {
+          pluginId: 'accounting-tool',
+          activeTab: 'transactions',
+          activeFiscalYear: new Date().getFullYear(),
+          searchQuery: ''
+        };
       } else if (payload && payload.pluginId === 'warehouse-tool') {
-        console.log('[main.ts] Inserimento del modulo Magazzino & Logistica nel canvas dell\'editor...');
-        editorCore.insertPluginBlock(
-          'warehouse-tool',
-          {
-            pluginId: 'warehouse-tool',
-            activeSpaceId: 'space-default',
-            searchQuery: ''
-          },
-          true
-        );
+        stateData = {
+          pluginId: 'warehouse-tool',
+          activeSpaceId: activeSpaceId,
+          searchQuery: ''
+        };
+      } else if (payload && payload.pluginId === 'minutes-tool') {
+        stateData = {
+          pluginId: 'minutes-tool',
+          activeSpaceId: activeSpaceId,
+          activeFiscalYear: new Date().getFullYear().toString()
+        };
       }
+
+      console.log(`[main.ts] 🚀 Apertura a tutto schermo del plugin "${payload.pluginId}"...`);
+      editorCore.setContent({
+        type: 'doc',
+        content: [
+          {
+            type: 'pluginBlock',
+            attrs: {
+              pluginId: payload.pluginId,
+              dataState: stateData,
+              isOrganizational
+            }
+          }
+        ]
+      });
+    });
+
+    /**
+     * LISTENER RITORNO ALLA HOME DELLO SPAZIO:
+     * Ripristina il canvas lasciando la parte bassa vuota.
+     */
+    eventBus.on('view:home', () => {
+      console.log('[main.ts] 🏠 Visuale Home attivata: ripristino area inferiore pulita');
+      editorCore.setContent({
+        type: 'doc',
+        content: []
+      });
     });
 
     /**
      * LISTENER CAMBIO SPAZIO DI LAVORO (WORKSPACE SWITCHER):
-     * Aggiorna istantaneamente il contesto applicativo ed il canvas dell'editor al cambio dello Spazio selezionato.
+     * Ripristina la visuale Home per il nuovo spazio selezionato.
      */
     eventBus.on('space:changed', (payload: any) => {
       if (payload && payload.spaceId) {
         console.log(`[main.ts] 🔄 RE-INDIRIZZAMENTO CONTESTO SPAZIO ATTIVO: "${payload.spaceId}" (${payload.spaceName})`);
-
-        // Re-inizializzazione del contenuto editor per lo spazio selezionato
-        const newSpaceHeading = {
+        editorCore.setContent({
           type: 'doc',
-          content: [
-            {
-              type: 'heading',
-              attrs: { level: 2 },
-              content: [{ type: 'text', text: `Documento Operativo - ${payload.spaceName}` }]
-            },
-            {
-              type: 'paragraph',
-              content: [
-                {
-                  type: 'text',
-                  text: `Stai attualmente visualizzando ed operando nello Spazio di Lavoro "${payload.spaceName}" (ID: ${payload.spaceId}). Tutti i dati, verbali, task e contatti caricati sono ora filtrati e sincronizzati per questo specifico ambiente.`
-                }
-              ]
-            }
-          ]
-        };
-
-        editorCore.setContent(newSpaceHeading);
+          content: []
+        });
       }
     });
   }
