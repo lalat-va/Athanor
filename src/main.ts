@@ -20,6 +20,8 @@ import { PermissionsPlugin } from './plugins/PermissionsPlugin.js';
 import { AccountingPlugin } from './plugins/AccountingPlugin.js';
 import { WarehousePlugin } from './plugins/WarehousePlugin.js';
 import { MinutesPlugin } from './plugins/MinutesPlugin.js';
+import { ResourcesPlugin } from './plugins/ResourcesPlugin.js';
+import { MealAllergenPlugin } from './plugins/MealAllergenPlugin.js';
 import { automationEngine } from './modules/AutomationEngine.js';
 import { permissionManager } from './modules/PermissionManager.js';
 import { CollabService } from './base/CollabService.js';
@@ -37,7 +39,7 @@ async function bootstrapApp(): Promise<void> {
   const authAdapter = new MockAuthAdapter();
   await i18nManager.init(db, eventBus);
 
-  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC), Rendicontazione, Magazzino e Verbali
+  // 2. Registrazione Plugin: Mappe, Task Manager, Rubrica (IdP), Permessi (RBAC), Rendicontazione, Magazzino, Verbali, Risorse e Pasti/Allergeni
   const mapPlugin = new MapPlugin();
   const taskPlugin = new TaskPlugin();
   const contactsPlugin = new ContactsPlugin();
@@ -45,6 +47,8 @@ async function bootstrapApp(): Promise<void> {
   const accountingPlugin = new AccountingPlugin();
   const warehousePlugin = new WarehousePlugin();
   const minutesPlugin = new MinutesPlugin();
+  const resourcesPlugin = new ResourcesPlugin();
+  const mealAllergenPlugin = new MealAllergenPlugin();
   await pluginManager.registerPlugin(mapPlugin);
   await pluginManager.registerPlugin(taskPlugin);
   await pluginManager.registerPlugin(contactsPlugin);
@@ -52,6 +56,8 @@ async function bootstrapApp(): Promise<void> {
   await pluginManager.registerPlugin(accountingPlugin);
   await pluginManager.registerPlugin(warehousePlugin);
   await pluginManager.registerPlugin(minutesPlugin);
+  await pluginManager.registerPlugin(resourcesPlugin);
+  await pluginManager.registerPlugin(mealAllergenPlugin);
 
   // 3. Avvio del monitor di sicurezza attivo ActiveKillSwitch (Remote Wipe Polling)
   const activeKillSwitch = ActiveKillSwitch.getInstance(storageAdapter);
@@ -394,7 +400,8 @@ async function initializeMainShell(
           pluginId: 'permissions-tool',
           activeSpaceId: activeSpaceId,
           currentUserRoles: userRoles as any,
-          currentUserId: userEmail
+          currentUserId: userEmail,
+          activeSettingsTab: payload.activeSettingsTab || 'cloud-connections'
         };
       } else if (payload && payload.pluginId === 'accounting-tool') {
         stateData = {
@@ -414,6 +421,14 @@ async function initializeMainShell(
           pluginId: 'minutes-tool',
           activeSpaceId: activeSpaceId,
           activeFiscalYear: new Date().getFullYear().toString()
+        };
+      } else if (payload && payload.pluginId === 'resources-tool') {
+        stateData = {
+          pluginId: 'resources-tool',
+          activeSpaceId: activeSpaceId,
+          viewMode: payload.viewMode,
+          selectedCategory: payload.selectedCategory,
+          searchQuery: payload.searchQuery
         };
       }
 

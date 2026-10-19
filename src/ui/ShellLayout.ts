@@ -24,7 +24,9 @@ export const PLUGIN_TITLES: Record<string, string> = {
   'permissions-tool': '<span>⚙️</span> <span>Impostazioni Ente & Permessi</span>',
   'accounting-tool': '<span>💰</span> <span>Rendicontazione & Contabilità</span>',
   'warehouse-tool': '<span>🛠️</span> <span>Magazzino & Logistica</span>',
-  'minutes-tool': '<span>📝</span> <span>Verbali & Decisioni</span>'
+  'minutes-tool': '<span>📝</span> <span>Verbali & Decisioni</span>',
+  'resources-tool': '<span>📚</span> <span>Hub Risorse & Conoscenza</span>',
+  'meal-allergen-tool': '<span>🍳</span> <span>Pasti, Alimenti & Allergeni</span>'
 };
 
 export interface WorkspaceItem {
@@ -246,6 +248,16 @@ export class ShellLayout {
                 <button id="btn-launch-minutes-plugin" class="w-full bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
                   <span class="text-base group-hover:scale-110 transition-transform">📝</span>
                   <span>Verbali & Decisioni</span>
+                </button>
+
+                <button id="btn-launch-resources-plugin" class="w-full bg-cyan-700 hover:bg-cyan-800 active:bg-cyan-900 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">📚</span>
+                  <span>Hub Risorse & Conoscenza</span>
+                </button>
+
+                <button id="btn-launch-meal-allergen-plugin" class="w-full bg-amber-700 hover:bg-amber-800 active:bg-amber-900 text-white font-bold py-2 px-3 rounded-lg shadow-lg transition-all flex items-center justify-center gap-2 group cursor-pointer text-xs">
+                  <span class="text-base group-hover:scale-110 transition-transform">🍳</span>
+                  <span>Pasti & Allergeni</span>
                 </button>
               </div>
 
@@ -515,6 +527,18 @@ export class ShellLayout {
     };
     this.container.querySelector('#nav-minutes-btn')?.addEventListener('click', triggerMinutes);
     this.container.querySelector('#btn-launch-minutes-plugin')?.addEventListener('click', triggerMinutes);
+
+    // Event listener per Hub Risorse & Conoscenza
+    this.container.querySelector('#btn-launch-resources-plugin')?.addEventListener('click', () => {
+      console.log('[ShellLayout] Richiesta attivazione Hub Risorse & Conoscenza...');
+      this.bus.emit('plugin:launch', { pluginId: 'resources-tool' });
+    });
+
+    // Event listener per Pasti, Alimenti & Allergeni
+    this.container.querySelector('#btn-launch-meal-allergen-plugin')?.addEventListener('click', () => {
+      console.log('[ShellLayout] Richiesta attivazione Plugin Pasti, Alimenti & Allergeni...');
+      this.bus.emit('plugin:launch', { pluginId: 'meal-allergen-tool' });
+    });
   }
 
   public getActiveSpaceId(): string {

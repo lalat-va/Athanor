@@ -20,6 +20,7 @@ import {
 } from '../modules/StorageAdapter.js';
 import { MockAuthAdapter } from '../modules/AuthAdapter.js';
 import { costCenterRegistry } from '../modules/CostCenterRegistry.js';
+import { resourcesSettings } from '../modules/Settings/ResourcesSettings.js';
 
 export type SettingsTabType =
   | 'cloud-connections'
@@ -27,7 +28,8 @@ export type SettingsTabType =
   | 'spaces-governance'
   | 'accounting-settings'
   | 'local-preferences'
-  | 'warehouse-positions';
+  | 'warehouse-positions'
+  | 'resources-settings';
 
 export interface PermissionsPluginState {
   pluginId: string;
@@ -220,6 +222,15 @@ export class PermissionsPlugin implements AppPlugin {
             }" data-tab="warehouse-positions">
               <span class="text-base">📦</span>
               <span>Posizioni Magazzino</span>
+            </button>
+
+            <button class="settings-sidebar-btn w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-lg font-semibold transition-all cursor-pointer ${
+              dataState.activeSettingsTab === 'resources-settings'
+                ? 'bg-blue-950 text-blue-200 border border-blue-800 shadow'
+                : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
+            }" data-tab="resources-settings">
+              <span class="text-base">📚</span>
+              <span>Risorse & Mappature</span>
             </button>
           </aside>
 
@@ -812,6 +823,10 @@ export class PermissionsPlugin implements AppPlugin {
               </div>
             </div>
 
+            <!-- TAB 7: RISORSE & MAPPATURE -->
+            <div class="tab-content ${dataState.activeSettingsTab === 'resources-settings' ? '' : 'hidden'} space-y-5" id="resources-settings-tab-mount">
+            </div>
+
           </main>
 
         </div>
@@ -828,7 +843,18 @@ export class PermissionsPlugin implements AppPlugin {
     this.loadSpacesMasterGrid(container, dataState, canManage);
     this.loadAccountingSettings(container, dataState);
     this.loadWarehousePositions(container, dataState);
+    this.loadResourcesSettings(container, dataState);
     this.bindEvents(container, dataState, canManage, isLegalRep);
+  }
+
+  /**
+   * CARICAMENTO E RENDERING IMPOSTAZIONI RISORSE
+   */
+  private async loadResourcesSettings(container: HTMLElement, dataState: PermissionsPluginState): Promise<void> {
+    const resMount = container.querySelector<HTMLElement>('#resources-settings-tab-mount');
+    if (resMount) {
+      await resourcesSettings.render(resMount, dataState.activeSpaceId);
+    }
   }
 
   /**

@@ -79,12 +79,61 @@ export interface AccountingTransactionRecord {
   status: 'DRAFT' | 'CONFIRMED' | 'PUBLISHED';
 }
 
+export interface ResourceRecord {
+  resourceId: string;
+  spaceId: string;
+  title: string;
+  category: string;
+  descriptionMarkdown: string;
+  coverImageUrl?: string | null;
+  sourcePluginId: string;
+  sourceEntityId?: string | null;
+  extractedMetadata: Record<string, string | number | boolean | string[]>;
+  attachments: Array<{
+    fileId: string;
+    fileName: string;
+    driveUrl: string;
+    fileType: 'IMAGE' | 'PDF' | 'AUDIO' | 'GPX' | 'OTHER';
+  }>;
+  tags: string[];
+  updatedAt: string;
+  createdBy: string;
+  isReadOnly: boolean;
+}
+
+export interface MenuRecord {
+  menuId: string;
+  spaceId: string;
+  eventId: string;
+  eventName: string;
+  participantsCount: number;
+  inheritParticipants: boolean;
+  status: 'DRAFT' | 'CONFIRMED' | 'ARCHIVED';
+  meals: any[];
+  purchasedIngredients: string[];
+  notes?: string;
+  updatedAt: string;
+}
+
+export interface GlobalIngredientRecord {
+  ingredientId: string;
+  name: string;
+  category: string;
+  unit: string;
+  defaultUnitCost: number;
+  allergens: string[];
+  isCustom?: boolean;
+}
+
 export class LocalDatabase extends Dexie {
   public documents!: Table<DocumentRecord, string>;
   public settings!: Table<SettingRecord, string>;
   public telemetry_logs!: Table<TelemetryLogRecord, string>;
   public rubrica!: Table<RubricaContactRecord, string>;
   public accounting!: Table<AccountingTransactionRecord, string>;
+  public resources!: Table<ResourceRecord, string>;
+  public menus!: Table<MenuRecord, string>;
+  public global_ingredients!: Table<GlobalIngredientRecord, string>;
 
   constructor() {
     super('AthanorLocalDB');
@@ -95,6 +144,15 @@ export class LocalDatabase extends Dexie {
       telemetry_logs: '&logId, userId, documentId, spaceId, sessionStart, sessionEnd',
       rubrica: '&contactId, firstName, lastName, email, phone, birthDate, isInternal, deleted',
       accounting: '&transactionId, spaceId, fiscalYear, date, type, linkedPluginId, costCenterIdSnapshot, status'
+    });
+
+    this.version(3).stores({
+      resources: '&resourceId, spaceId, category, sourcePluginId, *tags, updatedAt'
+    });
+
+    this.version(4).stores({
+      menus: '&menuId, spaceId, eventId, status, updatedAt',
+      global_ingredients: '&ingredientId, name, category, *allergens'
     });
 
     this.on('ready', async () => {
